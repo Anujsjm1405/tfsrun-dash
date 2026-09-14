@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-function nodeConfig(number) {
+function getNodeConfig(number) {
     return {
         name: process.env[`PVE_NODE${number}_NAME`],
         host: process.env[`PVE_NODE${number}_HOST`],
@@ -11,8 +11,10 @@ function nodeConfig(number) {
     };
 }
 
-module.exports = {
-    node1: nodeConfig(1),
-    node2: nodeConfig(2),
-    node3: nodeConfig(3)
+const proxmox = {
+    node1: getNodeConfig(1),
+    node2: getNodeConfig(2),
+    node3: getNodeConfig(3)
 };
+
+module.exports = proxmox;

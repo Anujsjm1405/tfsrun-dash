@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title><%= title %></title>
+
+    <link
+        rel="stylesheet"
+        href="/css/compute.css"
+    >
+
+</head>
+
+
+<body>
+
+    <header class="topbar">
+
+        <div class="topbar-brand">
+            TFSrun
+        </div>
+
+        <nav class="topbar-nav">
+
+            <a
+                href="/student"
+            >
+                Dashboard
+            </a>
+
+            <a
+                href="/student/compute"
+                class="active"
+            >
+                Compute
+            </a>
+
+            <button
+                type="button"
+                id="logoutButton"
+                class="logout-button"
+            >
+                Logout
+            </button>
+
+        </nav>
+
+    </header>
+
+
+    <main class="page">
+
+        <section class="page-header">
+
+            <div>
+
+                <h1>
+                    Compute
+                </h1>
+
+                <p>
+                    Create and manage your virtual machines.
+                </p>
+
+            </div>
+
+        </section>
+
+
+        <div
+            id="globalMessage"
+            class="message hidden"
+        ></div>
+
+
+        <!-- CREATE VM -->
+
+        <section class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <h2>
+                        Create Virtual Machine
+                    </h2>
+
+                    <p>
+                        Choose the resources and credentials for your VM.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <form
+                id="createVMForm"
+            >
+
+                <div class="form-grid">
+
+                    <div class="form-group">
+
+                        <label for="vmNameInput">
+                            VM Name
+                        </label>
+
+                        <input
+                            id="vmNameInput"
+                            name="name"
+                            type="text"
+                            placeholder="my-vm"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="cpuInput">
+                            CPU
+                        </label>
+
+                        <select
+                            id="cpuInput"
+                            name="cpu"
+                            required
+                        >
+
+                            <option value="1">
+                                1 Core
+                            </option>
+
+                            <option value="2">
+                                2 Cores
+                            </option>
+
+                            <option value="4">
+                                4 Cores
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="ramInput">
+                            RAM
+                        </label>
+
+                        <select
+                            id="ramInput"
+                            name="ram"
+                            required
+                        >
+
+                            <option value="2">
+                                2 GB
+                            </option>
+
+                            <option value="4">
+                                4 GB
+                            </option>
+
+                            <option value="6">
+                                6 GB
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="storageInput">
+                            Storage
+                        </label>
+
+                        <select
+                            id="storageInput"
+                            name="storage"
+                            required
+                        >
+
+                            <option value="32">
+                                32 GB
+                            </option>
+
+                            <option value="64">
+                                64 GB
+                            </option>
+
+                            <option value="128">
+                                128 GB
+                            </option>
+
+                        </select>
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="usernameInput">
+                            VM Username
+                        </label>
+
+                        <input
+                            id="usernameInput"
+                            name="username"
+                            type="text"
+                            placeholder="ubuntu"
+                            required
+                        >
+
+                    </div>
+
+
+                    <div class="form-group">
+
+                        <label for="passwordInput">
+                            VM Password
+                        </label>
+
+                        <input
+                            id="passwordInput"
+                            name="password"
+                            type="password"
+                            minlength="4"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-actions">
+
+                    <button
+                        type="submit"
+                        class="button button-primary"
+                        id="createButton"
+                    >
+                        Create VM
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+
+
+        <!-- VM LIST -->
+
+        <section class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <h2>
+                        Virtual Machines
+                    </h2>
+
+                    <p>
+                        Manage your active and previously deleted VMs.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="tab-buttons">
+
+                <button
+                    type="button"
+                    class="tab-button active"
+                    data-tab="active"
+                >
+                    Active VMs
+                </button>
+
+                <button
+                    type="button"
+                    class="tab-button"
+                    data-tab="history"
+                >
+                    History
+                </button>
+
+            </div>
+
+
+            <div
+                id="activeTab"
+                class="tab-content"
+            >
+
+                <div
+                    id="vmList"
+                    class="vm-list"
+                ></div>
+
+            </div>
+
+
+            <div
+                id="historyTab"
+                class="tab-content hidden"
+            >
+
+                <div
+                    id="historyList"
+                    class="history-list"
+                ></div>
+
+            </div>
+
+        </section>
+
+
+        <!-- SOPHOS GUIDE -->
+
+        <section class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <h2>
+                        Sophos Network Login
+                    </h2>
+
+                    <p>
+                        TFSrun does not store your Sophos credentials.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="info-box">
+
+                Configure Sophos inside your VM using the instructions below.
+
+                Your Sophos ID and password stay inside the VM.
+
+            </div>
+
+
+            <div class="guide-step">
+
+                <div class="guide-title">
+                    Step 1 — Create the configuration directory
+                </div>
+
+                <div class="code-block">
+
+                    <button
+                        class="copy-button"
+                        type="button"
+                        data-copy="sudo mkdir -p /etc/tfsrun"
+                    >
+                        Copy
+                    </button>
+
+                    <pre>sudo mkdir -p /etc/tfsrun</pre>
+
+                </div>
+
+            </div>
+
+
+            <div class="guide-step">
+
+                <div class="guide-title">
+                    Step 2 — Create the Sophos configuration
+                </div>
+
+                <div class="code-block">
+
+                    <button
+                        class="copy-button"
+                        type="button"
+                        data-copy="sudo nano /etc/tfsrun/portal.conf"
+                    >
+                        Copy
+                    </button>
+
+                    <pre>sudo nano /etc/tfsrun/portal.conf</pre>
+
+                </div>
+
+            </div>
+
+
+            <div class="guide-step">
+
+                <div class="guide-title">
+                    Step 3 — Put your Sophos credentials in the file
+                </div>
+
+                <div class="code-block">
+
+                    <button
+                        class="copy-button"
+                        type="button"
+                        data-copy='USERNAME="YOUR_SOPHOS_ID"
+PASSWORD="YOUR_SOPHOS_PASSWORD"
+PORTAL_URL="http://192.168.1.8:8090/login.xml"'
+                    >
+                        Copy
+                    </button>
+
+                    <pre>USERNAME="YOUR_SOPHOS_ID"
+PASSWORD="YOUR_SOPHOS_PASSWORD"
+PORTAL_URL="http://192.168.1.8:8090/login.xml"</pre>
+
+                </div>
+
+            </div>
+
+
+            <div class="guide-step">
+
+                <div class="guide-title">
+                    Step 4 — Protect the configuration
+                </div>
+
+                <div class="code-block">
+
+                    <button
+                        class="copy-button"
+                        type="button"
+                        data-copy="sudo chown root:root /etc/tfsrun/portal.conf
+sudo chmod 600 /etc/tfsrun/portal.conf"
+                    >
+                        Copy
+                    </button>
+
+                    <pre>sudo chown root:root /etc/tfsrun/portal.conf
+sudo chmod 600 /etc/tfsrun/portal.conf</pre>
+
+                </div>
+
+            </div>
+
+
+            <div class="guide-step">
+
+                <div class="guide-title">
+                    Step 5 — Enable the Sophos timer
+                </div>
+
+                <div class="code-block">
+
+                    <button
+                        class="copy-button"
+                        type="button"
+                        data-copy="sudo systemctl daemon-reload
+sudo systemctl enable portal-login.timer
+sudo systemctl start portal-login.timer"
+                    >
+                        Copy
+                    </button>
+
+                    <pre>sudo systemctl daemon-reload
+sudo systemctl enable portal-login.timer
+sudo systemctl start portal-login.timer</pre>
+
+                </div>
+
+            </div>
+
+
+            <div class="guide-step">
+
+                <div class="guide-title">
+                    Step 6 — Verify
+                </div>
+
+                <div class="code-block">
+
+                    <button
+                        class="copy-button"
+                        type="button"
+                        data-copy="systemctl is-enabled portal-login.timer
+systemctl is-active portal-login.timer"
+                    >
+                        Copy
+                    </button>
+
+                    <pre>systemctl is-enabled portal-login.timer
+systemctl is-active portal-login.timer</pre>
+
+                </div>
+
+                <div class="expected-output">
+
+                    Expected:
+
+                    <strong>
+                        enabled
+                    </strong>
+
+                    and
+
+                    <strong>
+                        active
+                    </strong>
+
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <script
+        type="module"
+        src="/js/compute.js"
+    ></script>
+
+
+    <!-- =====================================================
+         LOGOUT
+    ====================================================== -->
+
+    <script>
+
+        const logoutButton =
+            document.getElementById(
+                "logoutButton"
+            );
+
+
+        if (logoutButton) {
+
+            logoutButton.addEventListener(
+                "click",
+                async () => {
+
+                    logoutButton.disabled =
+                        true;
+
+                    logoutButton.textContent =
+                        "Logging out...";
+
+
+                    try {
+
+                        const response =
+                            await fetch(
+                                "/api/auth/logout",
+                                {
+                                    method:
+                                        "POST",
+
+                                    headers: {
+                                        "Content-Type":
+                                            "application/json"
+                                    },
+
+                                    credentials:
+                                        "same-origin"
+                                }
+                            );
+
+
+                        const data =
+                            await response.json();
+
+
+                        if (
+                            !response.ok ||
+                            !data.success
+                        ) {
+
+                            throw new Error(
+                                data.error ||
+                                "Logout failed"
+                            );
+                        }
+
+
+                        window.location.href =
+                            "/login";
+
+                    } catch (error) {
+
+                        console.error(
+                            "Logout error:",
+                            error
+                        );
+
+
+                        logoutButton.disabled =
+                            false;
+
+                        logoutButton.textContent =
+                            "Logout";
+
+
+                        alert(
+                            error.message ||
+                            "Logout failed"
+                        );
+                    }
+                }
+            );
+        }
+
+
+        /* =================================================
+           SOPHOS COPY BUTTONS
+        ================================================= */
+
+        document
+            .querySelectorAll(
+                ".copy-button"
+            )
+            .forEach(
+                button => {
+
+                    button.addEventListener(
+                        "click",
+                        async () => {
+
+                            const text =
+                                button.dataset.copy;
+
+
+                            try {
+
+                                await navigator.clipboard.writeText(
+                                    text
+                                );
+
+
+                                const original =
+                                    button.textContent;
+
+
+                                button.textContent =
+                                    "Copied";
+
+
+                                setTimeout(
+                                    () => {
+
+                                        button.textContent =
+                                            original;
+
+                                    },
+                                    1200
+                                );
+
+                            } catch (error) {
+
+                                console.error(
+                                    "Copy failed:",
+                                    error
+                                );
+
+                                alert(
+                                    "Copy failed. Please copy the command manually."
+                                );
+                            }
+                        }
+                    );
+                }
+            );
+
+    </script>
+
+</body>
+
+</html>

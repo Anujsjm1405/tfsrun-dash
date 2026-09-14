@@ -1,1177 +1,1767 @@
 const pool = require("../db/mysql");
 
-const proxmoxConfig =
-    require("../config/proxmox");
-
-const ProxmoxClient =
-    require("../proxmox/proxmoxClient");
+const {
+    getProxmoxClient
+} = require("../proxmox");
 
 const resourceAllocator =
     require("./resourceAllocator");
 
 
-class ServiceManager {
+/* =========================================================
+   COMPUTE LIMITS
+========================================================= */
 
-    constructor() {
+const ALLOWED_CPU = [
+    1,
+    2,
+    4
+];
 
-        this.clients = {
-            node1:
-                new ProxmoxClient(
-                    proxmoxConfig.node1
-                ),
+const ALLOWED_RAM_MB = [
+    2048,
+    4096,
+    6144
+];
 
-            node2:
-                new ProxmoxClient(
-                    proxmoxConfig.node2
-                ),
+const ALLOWED_STORAGE_GB = [
+    32,
+    64,
+    128
+];
 
-            node3:
-                new ProxmoxClient(
-                    proxmoxConfig.node3
-                )
-        };
 
+/* =========================================================
+   VALIDATE COMPUTE REQUEST
+========================================================= */
+
+function validateComputeRequest(
+    data
+) {
+
+    const {
+
+        name,
+
+        ramMb,
+
+        ram,
+
+        cpu,
+
+        storageGb,
+
+        storage,
+
+        storageType,
+
+        username,
+
+        password
+
+    } = data;
+
+
+    const cpuValue =
+        Number(cpu);
+
+
+    let ramValue;
+
+
+    if (
+        ramMb !== undefined &&
+        ramMb !== null
+    ) {
+
+        ramValue =
+            Number(ramMb);
+
+    } else {
+
+        ramValue =
+            Number(ram) * 1024;
     }
 
 
-    getClient(nodeName) {
+    const storageValue =
+        Number(
 
-        const client =
-            this.clients[nodeName];
+            storageGb !== undefined &&
+            storageGb !== null
 
-        if (!client) {
+                ? storageGb
+
+                : storage
+        );
+
+
+    if (
+        !name ||
+        typeof name !== "string" ||
+        name.trim().length < 1 ||
+        name.trim().length > 100
+    ) {
+
+        throw new Error(
+            "Invalid VM name"
+        );
+    }
+
+
+    if (
+        !ALLOWED_CPU.includes(
+            cpuValue
+        )
+    ) {
+
+        throw new Error(
+            "CPU must be 1, 2, or 4 cores"
+        );
+    }
+
+
+    if (
+        !ALLOWED_RAM_MB.includes(
+            ramValue
+        )
+    ) {
+
+        throw new Error(
+            "RAM must be 2, 4, or 6 GB"
+        );
+    }
+
+
+    if (
+        !ALLOWED_STORAGE_GB.includes(
+            storageValue
+        )
+    ) {
+
+        throw new Error(
+            "Storage must be 32, 64, or 128 GB"
+        );
+    }
+
+
+    const normalizedStorageType =
+        storageType ||
+        "local";
+
+
+    if (
+        normalizedStorageType !==
+            "local" &&
+
+        normalizedStorageType !==
+            "ssd"
+    ) {
+
+        throw new Error(
+            "Invalid storage type"
+        );
+    }
+
+
+    if (
+        !username ||
+        typeof username !== "string" ||
+        username.trim().length < 1
+    ) {
+
+        throw new Error(
+            "Username is required"
+        );
+    }
+
+
+    if (
+        !password ||
+        typeof password !== "string" ||
+        password.length < 4
+    ) {
+
+        throw new Error(
+            "Password must contain at least 4 characters"
+        );
+    }
+
+
+    return {
+
+        name:
+            name.trim(),
+
+        cpu:
+            cpuValue,
+
+        ramMb:
+            ramValue,
+
+        storageGb:
+            storageValue,
+
+        storageType:
+            normalizedStorageType,
+
+        username:
+            username.trim(),
+
+        password
+    };
+}
+
+
+/* =========================================================
+   VM NAME SANITIZATION
+========================================================= */
+
+function sanitizeVMName(
+    name
+) {
+
+    return name
+
+        .trim()
+
+        .replace(
+            /[^a-zA-Z0-9._-]/g,
+            "-"
+        )
+
+        .replace(
+            /-+/g,
+            "-"
+        )
+
+        .substring(
+            0,
+            80
+        );
+}
+
+
+/* =========================================================
+   GET SINGLE SERVICE
+========================================================= */
+
+async function getService(
+    serviceId
+) {
+
+    const [rows] =
+        await pool.execute(
+
+            `
+            SELECT
+
+                s.id,
+
+                s.service_type,
+
+                s.name,
+
+                s.owner_id,
+
+                s.node_id,
+
+                s.vmid,
+
+                s.ip_address,
+
+                s.status,
+
+                s.created_at,
+
+                s.updated_at,
+
+                n.name AS node_name,
+
+                n.host AS node_host,
+
+                COALESCE(
+                    (
+                        SELECT
+                            a.cpu
+                        FROM allocations a
+                        WHERE
+                            a.service_id =
+                                s.id
+                            AND a.status =
+                                'active'
+                        ORDER BY
+                            a.id DESC
+                        LIMIT 1
+                    ),
+                    0
+                ) AS cpu,
+
+                COALESCE(
+                    (
+                        SELECT
+                            a.ram_mb
+                        FROM allocations a
+                        WHERE
+                            a.service_id =
+                                s.id
+                            AND a.status =
+                                'active'
+                        ORDER BY
+                            a.id DESC
+                        LIMIT 1
+                    ),
+                    0
+                ) AS ram_mb,
+
+                COALESCE(
+                    (
+                        SELECT
+                            a.storage_gb
+                        FROM allocations a
+                        WHERE
+                            a.service_id =
+                                s.id
+                            AND a.status =
+                                'active'
+                        ORDER BY
+                            a.id DESC
+                        LIMIT 1
+                    ),
+                    0
+                ) AS storage_gb,
+
+                (
+                    SELECT
+                        a.storage_type
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ) AS storage_type
+
+            FROM services s
+
+            INNER JOIN nodes n
+
+                ON n.id =
+                    s.node_id
+
+            WHERE
+                s.id = ?
+
+            LIMIT 1
+            `,
+
+            [
+                serviceId
+            ]
+        );
+
+
+    return (
+        rows[0] ||
+        null
+    );
+}
+
+
+/* =========================================================
+   GET ACTIVE SERVICES
+========================================================= */
+
+async function getServices(
+    ownerId = null
+) {
+
+    let sql = `
+
+        SELECT
+
+            s.id,
+
+            s.service_type,
+
+            s.name,
+
+            s.owner_id,
+
+            s.node_id,
+
+            s.vmid,
+
+            s.ip_address,
+
+            s.status,
+
+            s.created_at,
+
+            s.updated_at,
+
+            n.name AS node_name,
+
+            COALESCE(
+                (
+                    SELECT
+                        a.cpu
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                        AND a.status =
+                            'active'
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ),
+                0
+            ) AS cpu,
+
+            COALESCE(
+                (
+                    SELECT
+                        a.ram_mb
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                        AND a.status =
+                            'active'
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ),
+                0
+            ) AS ram_mb,
+
+            COALESCE(
+                (
+                    SELECT
+                        a.storage_gb
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                        AND a.status =
+                            'active'
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ),
+                0
+            ) AS storage_gb,
+
+            (
+                SELECT
+                    a.storage_type
+                FROM allocations a
+                WHERE
+                    a.service_id =
+                        s.id
+                ORDER BY
+                    a.id DESC
+                LIMIT 1
+            ) AS storage_type
+
+        FROM services s
+
+        INNER JOIN nodes n
+
+            ON n.id =
+                s.node_id
+
+        WHERE
+            s.status <>
+                'deleted'
+    `;
+
+
+    const params = [];
+
+
+    if (
+        ownerId !== null
+    ) {
+
+        sql += `
+
+            AND s.owner_id = ?
+
+        `;
+
+        params.push(
+            ownerId
+        );
+    }
+
+
+    sql += `
+
+        ORDER BY
+            s.created_at DESC
+
+    `;
+
+
+    const [rows] =
+        await pool.execute(
+            sql,
+            params
+        );
+
+
+    return rows;
+}
+
+
+/* =========================================================
+   GET SERVICE HISTORY
+========================================================= */
+
+async function getServiceHistory(
+    ownerId = null
+) {
+
+    let sql = `
+
+        SELECT
+
+            s.id,
+
+            s.service_type,
+
+            s.name,
+
+            s.owner_id,
+
+            s.node_id,
+
+            s.vmid,
+
+            s.ip_address,
+
+            s.status,
+
+            s.created_at,
+
+            s.updated_at,
+
+            n.name AS node_name,
+
+            COALESCE(
+                (
+                    SELECT
+                        a.cpu
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ),
+                0
+            ) AS cpu,
+
+            COALESCE(
+                (
+                    SELECT
+                        a.ram_mb
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ),
+                0
+            ) AS ram_mb,
+
+            COALESCE(
+                (
+                    SELECT
+                        a.storage_gb
+                    FROM allocations a
+                    WHERE
+                        a.service_id =
+                            s.id
+                    ORDER BY
+                        a.id DESC
+                    LIMIT 1
+                ),
+                0
+            ) AS storage_gb,
+
+            (
+                SELECT
+                    a.storage_type
+                FROM allocations a
+                WHERE
+                    a.service_id =
+                        s.id
+                ORDER BY
+                    a.id DESC
+                LIMIT 1
+            ) AS storage_type
+
+        FROM services s
+
+        INNER JOIN nodes n
+
+            ON n.id =
+                s.node_id
+
+        WHERE
+            s.status =
+                'deleted'
+    `;
+
+
+    const params = [];
+
+
+    if (
+        ownerId !== null
+    ) {
+
+        sql += `
+
+            AND s.owner_id = ?
+
+        `;
+
+        params.push(
+            ownerId
+        );
+    }
+
+
+    sql += `
+
+        ORDER BY
+            s.updated_at DESC,
+            s.id DESC
+
+    `;
+
+
+    const [rows] =
+        await pool.execute(
+            sql,
+            params
+        );
+
+
+    return rows;
+}
+
+
+/* =========================================================
+   GET NODE
+========================================================= */
+
+async function getNodeById(
+    connection,
+    nodeId
+) {
+
+    const [rows] =
+        await connection.execute(
+
+            `
+            SELECT *
+
+            FROM nodes
+
+            WHERE id = ?
+
+            LIMIT 1
+            `,
+
+            [
+                nodeId
+            ]
+        );
+
+
+    return (
+        rows[0] ||
+        null
+    );
+}
+
+
+/* =========================================================
+   CREATE COMPUTE SERVICE
+========================================================= */
+
+async function createComputeService(
+    data,
+    ownerId
+) {
+
+    const effectiveOwnerId =
+
+        ownerId !== undefined &&
+        ownerId !== null
+
+            ? ownerId
+
+            : data.ownerId;
+
+
+    if (
+        effectiveOwnerId ===
+            undefined ||
+
+        effectiveOwnerId ===
+            null
+    ) {
+
+        throw new Error(
+            "Owner ID is required"
+        );
+    }
+
+
+    const request =
+        validateComputeRequest(
+            data
+        );
+
+
+    let connection =
+        null;
+
+    let serviceId =
+        null;
+
+    let vmid =
+        null;
+
+    let node =
+        null;
+
+
+    try {
+
+        connection =
+            await pool.getConnection();
+
+
+        await connection.beginTransaction();
+
+
+        /*
+         * Create the service first.
+         *
+         * The allocator will select the
+         * actual suitable node.
+         */
+
+        const [serviceResult] =
+            await connection.execute(
+
+                `
+                INSERT INTO services (
+
+                    service_type,
+
+                    name,
+
+                    owner_id,
+
+                    node_id,
+
+                    status
+
+                )
+
+                VALUES (
+
+                    'compute',
+
+                    ?,
+
+                    ?,
+
+                    1,
+
+                    'provisioning'
+                )
+                `,
+
+                [
+
+                    request.name,
+
+                    effectiveOwnerId
+                ]
+            );
+
+
+        serviceId =
+            serviceResult.insertId;
+
+
+        /*
+         * IMPORTANT FIX:
+         *
+         * ResourceAllocator expects the
+         * connection and allocation options.
+         */
+
+        const allocation =
+            await resourceAllocator.allocate(
+
+                connection,
+
+                {
+
+                    serviceId,
+
+                    serviceType:
+                        "compute",
+
+                    cpu:
+                        request.cpu,
+
+                    ramMb:
+                        request.ramMb,
+
+                    storageGb:
+                        request.storageGb,
+
+                    storageType:
+                        request.storageType,
+
+                    description:
+                        `Compute VM ${request.name}`
+                }
+            );
+
+
+        /*
+         * Get actual selected node.
+         */
+
+        node =
+            await getNodeById(
+
+                connection,
+
+                allocation.nodeId
+            );
+
+
+        if (!node) {
+
             throw new Error(
-                `No Proxmox client configured for ${nodeName}`
+                "Allocated node could not be found"
             );
         }
 
-        return client;
-    }
+
+        await connection.execute(
+
+            `
+            UPDATE services
+
+            SET node_id = ?
+
+            WHERE id = ?
+            `,
+
+            [
+
+                node.id,
+
+                serviceId
+            ]
+        );
 
 
-    async getTemplate(serviceType) {
+        /*
+         * Commit database allocation.
+         */
 
-        const [rows] =
+        await connection.commit();
+
+
+        connection.release();
+
+        connection =
+            null;
+
+
+        /* =================================================
+           PROXMOX
+        ================================================= */
+
+        const proxmox =
+            getProxmoxClient(
+                node.name
+            );
+
+
+        /*
+         * Find node-local compute template.
+         */
+
+        const [templates] =
             await pool.execute(
+
                 `
                 SELECT
-                    t.id,
-                    t.service_type,
-                    t.node_id,
-                    t.vmid,
-                    t.name,
-                    t.storage_gb
-                FROM templates t
-                WHERE t.service_type = ?
-                  AND t.enabled = TRUE
-                ORDER BY t.id
+
+                    vmid,
+
+                    storage_gb
+
+                FROM templates
+
+                WHERE
+
+                    node_id = ?
+
+                    AND service_type =
+                        'compute'
+
+                    AND enabled =
+                        TRUE
+
+                ORDER BY
+                    id ASC
+
                 LIMIT 1
                 `,
-                [serviceType]
+
+                [
+                    node.id
+                ]
             );
 
-        if (!rows.length) {
+
+        if (
+            templates.length === 0
+        ) {
+
             throw new Error(
-                `No enabled ${serviceType} template found`
-            );
-        }
-
-        return rows[0];
-    }
-
-
-    async createService({
-        serviceType,
-        name,
-        cpu,
-        ramMb,
-        storageGb = 32,
-        ownerId = null
-    }) {
-
-        if (!serviceType) {
-            throw new Error(
-                "serviceType is required"
-            );
-        }
-
-        if (!["compute", "database"].includes(serviceType)) {
-            throw new Error(
-                "Invalid serviceType"
-            );
-        }
-
-        if (!name) {
-            throw new Error(
-                "Service name is required"
-            );
-        }
-
-        if (!Number.isInteger(cpu) || cpu <= 0) {
-            throw new Error(
-                "CPU must be a positive integer"
-            );
-        }
-
-        if (!Number.isInteger(ramMb) || ramMb <= 0) {
-            throw new Error(
-                "RAM must be a positive integer"
-            );
-        }
-
-        if (!Number.isFinite(storageGb) || storageGb <= 0) {
-            throw new Error(
-                "Storage must be greater than zero"
+                `No compute template configured for ${node.name}`
             );
         }
 
 
         const template =
-            await this.getTemplate(
-                serviceType
+            templates[0];
+
+
+        /*
+         * Get new VM ID.
+         */
+
+        vmid =
+            await proxmox.getNextVMID();
+
+
+        const vmName =
+            sanitizeVMName(
+
+                `${request.name}-${serviceId}`
             );
 
 
-        let preferredNodeId = null;
+        /*
+         * Clone template.
+         */
 
-        if (serviceType === "database") {
-            preferredNodeId =
-                Number(template.node_id);
-        }
+        const cloneTask =
+            await proxmox.cloneVM(
 
+                template.vmid,
 
-        const selectedNode =
-            await resourceAllocator.findNode({
-                cpu,
-                ramMb,
-                storageGb,
-                storageType: "local",
-                preferredNodeId
-            });
+                vmid,
+
+                vmName
+            );
 
 
-        if (!selectedNode) {
-            throw new Error(
-                "No node has sufficient resources"
+        if (cloneTask) {
+
+            await proxmox.waitForTask(
+                cloneTask
             );
         }
 
 
-        console.log(
-            `Selected node: ${selectedNode.name}`
+        /*
+         * Configure VM.
+         */
+
+        await proxmox.configureVM(
+
+            vmid,
+
+            {
+
+                cores:
+                    request.cpu,
+
+                memoryMb:
+                    request.ramMb,
+
+                username:
+                    request.username,
+
+                password:
+                    request.password
+            }
         );
 
 
-        const templateNodeId =
-            Number(template.node_id);
+        /*
+         * Resize disk if required.
+         */
 
-        const templateNode =
-            await this.getNodeById(
-                templateNodeId
-            );
-
-        const templateNodeName =
-            templateNode.name;
-
-        const destinationNodeName =
-            selectedNode.name;
-
-
-        const templateClient =
-            this.getClient(
-                templateNodeName
-            );
-
-        const destinationClient =
-            this.getClient(
-                destinationNodeName
+        const templateStorage =
+            Number(
+                template.storage_gb || 32
             );
 
 
-        const connection =
-            await pool.getConnection();
+        const additionalStorage =
 
-        let serviceId = null;
-        let allocationId = null;
-        let vmid = null;
-
-        let resourceCreated = false;
-        let resourceNodeName = null;
+            request.storageGb -
+            templateStorage;
 
 
-        try {
+        if (
+            additionalStorage > 0
+        ) {
 
-            await connection.beginTransaction();
+            await proxmox.resizeDisk(
 
+                vmid,
 
-            const [lockedNodes] =
-                await connection.execute(
-                    `
-                    SELECT id
-                    FROM nodes
-                    WHERE id = ?
-                      AND enabled = TRUE
-                    FOR UPDATE
-                    `,
-                    [selectedNode.id]
-                );
+                "scsi0",
+
+                additionalStorage
+            );
+        }
 
 
-            if (!lockedNodes.length) {
-                throw new Error(
-                    "Selected node is unavailable"
-                );
-            }
+        /*
+         * Store VM ID.
+         */
+
+        await pool.execute(
+
+            `
+            UPDATE services
+
+            SET vmid = ?
+
+            WHERE id = ?
+            `,
+
+            [
+
+                vmid,
+
+                serviceId
+            ]
+        );
 
 
-            const resources =
-                await resourceAllocator.getNodeResources(
-                    selectedNode.id,
-                    connection
-                );
+        /*
+         * Start VM.
+         */
+
+        const startTask =
+            await proxmox.startVM(
+                vmid
+            );
 
 
-            if (resources.cpu.available < cpu) {
-                throw new Error(
-                    "Insufficient CPU"
-                );
-            }
+        if (startTask) {
+
+            await proxmox.waitForTask(
+                startTask
+            );
+        }
 
 
-            if (resources.ram.available < ramMb) {
-                throw new Error(
-                    "Insufficient RAM"
-                );
-            }
+        /*
+         * Wait for Guest Agent.
+         */
+
+        await proxmox.waitForGuestAgent(
+            vmid
+        );
 
 
-            if (storageGb > 0) {
+        /*
+         * Get IPv4.
+         */
 
-                const availableStorage =
-                    resources.storage.total -
-                    resources.storage.reserved -
-                    resources.storage.localAllocated;
-
-
-                if (availableStorage < storageGb) {
-                    throw new Error(
-                        "Insufficient local storage"
-                    );
-                }
-
-            }
+        const ip =
+            await proxmox.waitForVMIPv4(
+                vmid
+            );
 
 
-            const [serviceResult] =
-                await connection.execute(
-                    `
-                    INSERT INTO services (
-                        service_type,
-                        name,
-                        owner_id,
-                        node_id,
-                        status
-                    )
-                    VALUES (?, ?, ?, ?, 'provisioning')
-                    `,
-                    [
-                        serviceType,
-                        name,
-                        ownerId,
-                        selectedNode.id
-                    ]
-                );
+        /*
+         * Mark active.
+         */
+
+        await pool.execute(
+
+            `
+            UPDATE services
+
+            SET
+
+                ip_address = ?,
+
+                status =
+                    'active'
+
+            WHERE id = ?
+            `,
+
+            [
+
+                ip,
+
+                serviceId
+            ]
+        );
 
 
-            serviceId =
-                serviceResult.insertId;
+        return await getService(
+            serviceId
+        );
 
 
-            const [allocationResult] =
-                await connection.execute(
-                    `
-                    INSERT INTO allocations (
-                        service_id,
-                        node_id,
-                        cpu,
-                        ram_mb,
-                        storage_gb,
-                        storage_type,
-                        allocation_type,
-                        status
-                    )
-                    VALUES (
-                        ?, ?, ?, ?, ?, 'local',
-                        'service',
-                        'active'
-                    )
-                    `,
-                    [
-                        serviceId,
-                        selectedNode.id,
-                        cpu,
-                        ramMb,
-                        storageGb
-                    ]
-                );
+    } catch (error) {
 
+        /*
+         * Roll back open DB transaction.
+         */
 
-            allocationId =
-                allocationResult.insertId;
+        if (connection) {
 
+            try {
 
-            await connection.commit();
+                await connection.rollback();
 
+            } catch (_) {}
 
-        } catch (error) {
-
-            await connection.rollback();
 
             connection.release();
 
-            throw error;
+            connection =
+                null;
         }
 
 
-        connection.release();
+        console.error(
 
+            `Compute provisioning failed for service ` +
+            `${serviceId || "unknown"}:`,
 
-        try {
-
-            console.log(
-                `Template: ${templateNodeName} / VMID ${template.vmid}`
-            );
-
-
-            /*
-             * --------------------------------------------------
-             * COMPUTE SERVICE
-             * --------------------------------------------------
-             */
-
-            if (serviceType === "compute") {
-
-                const version =
-                    await templateClient.getVersion();
-
-                console.log(
-                    `Proxmox ${templateNodeName}:`,
-                    version
-                );
-
-
-                vmid =
-                    await templateClient.getNextVMID();
-
-
-                console.log(
-                    `Proxmox allocated VMID ${vmid}`
-                );
-
-
-                /*
-                 * Clone template 111 on node1.
-                 *
-                 * The template disk is stored on NFS.
-                 */
-
-                console.log(
-                    `Cloning VM ${template.vmid} on ${templateNodeName}`
-                );
-
-                const cloneTask =
-                    await templateClient.cloneVM(
-                        templateNodeName,
-                        template.vmid,
-                        vmid,
-                        name
-                    );
-
-
-                console.log(
-                    `Clone task started: ${cloneTask}`
-                );
-
-
-                await templateClient.waitForTask(
-                    templateNodeName,
-                    cloneTask
-                );
-
-
-                resourceCreated = true;
-                resourceNodeName =
-                    templateNodeName;
-
-
-                console.log(
-                    `VM ${vmid} successfully cloned on ${templateNodeName}`
-                );
-
-
-                /*
-                 * Migrate the VM to the node selected
-                 * by the resource allocator.
-                 */
-
-                if (
-                    destinationNodeName !==
-                    templateNodeName
-                ) {
-
-                    console.log(
-                        `Migrating VM ${vmid} from ${templateNodeName} to ${destinationNodeName}`
-                    );
-
-
-                    const migrationTask =
-                        await templateClient.migrateVM(
-                            templateNodeName,
-                            vmid,
-                            destinationNodeName,
-                            "nfs-template"
-                        );
-
-
-                    console.log(
-                        `Migration task started: ${migrationTask}`
-                    );
-
-
-                    await templateClient.waitForTask(
-                        templateNodeName,
-                        migrationTask
-                    );
-
-
-                    resourceNodeName =
-                        destinationNodeName;
-
-
-                    console.log(
-                        `VM ${vmid} migrated to ${destinationNodeName}`
-                    );
-
-                }
-
-
-                /*
-                 * Move the OS disk from NFS to the
-                 * selected node's local-lvm.
-                 *
-                 * This is the final storage location
-                 * for the user's VM.
-                 */
-
-                const destinationClientForDisk =
-                    this.getClient(
-                        resourceNodeName
-                    );
-
-
-                console.log(
-                    `Moving VM ${vmid} OS disk to local-lvm`
-                );
-
-
-                const moveTask =
-                    await destinationClientForDisk.moveVMDisk(
-                        resourceNodeName,
-                        vmid,
-                        "scsi0",
-                        "local-lvm",
-                        true
-                    );
-
-
-                console.log(
-                    `Disk move task started: ${moveTask}`
-                );
-
-
-                await destinationClientForDisk.waitForTask(
-                    resourceNodeName,
-                    moveTask
-                );
-
-
-                console.log(
-                    `VM ${vmid} OS disk moved to local-lvm`
-                );
-
-
-                /*
-                 * Configure CPU and RAM.
-                 */
-
-                console.log(
-                    `Configuring VM ${vmid}: ${cpu} CPU / ${ramMb} MB RAM`
-                );
-
-
-                await destinationClientForDisk.setVMResources(
-                    resourceNodeName,
-                    vmid,
-                    {
-                        cores: cpu,
-                        memory: ramMb
-                    }
-                );
-
-
-                /*
-                 * Start VM.
-                 */
-
-                console.log(
-                    `Starting VM ${vmid}`
-                );
-
-
-                const startTask =
-                    await destinationClientForDisk.startVM(
-                        resourceNodeName,
-                        vmid
-                    );
-
-
-                if (startTask) {
-
-                    await destinationClientForDisk.waitForTask(
-                        resourceNodeName,
-                        startTask
-                    );
-
-                }
-
-
-                console.log(
-                    `VM ${vmid} started`
-                );
-
-
-                /*
-                 * Wait for Guest Agent IP.
-                 */
-
-                console.log(
-                    `Waiting for IP address of VM ${vmid}`
-                );
-
-
-                const ipAddress =
-                    await destinationClientForDisk.waitForVMIPv4(
-                        resourceNodeName,
-                        vmid
-                    );
-
-
-                console.log(
-                    `VM ${vmid} IP address: ${ipAddress}`
-                );
-
-
-                await pool.execute(
-                    `
-                    UPDATE services
-                    SET
-                        vmid = ?,
-                        ip_address = ?,
-                        status = 'active'
-                    WHERE id = ?
-                    `,
-                    [
-                        vmid,
-                        ipAddress,
-                        serviceId
-                    ]
-                );
-
-
-                console.log(
-                    `Service ${serviceId} marked active`
-                );
-
-
-                return {
-                    serviceId,
-                    vmid,
-                    nodeId: selectedNode.id,
-                    nodeName: selectedNode.name,
-                    allocationId,
-                    status: "active",
-                    ipAddress
-                };
-
-            }
-
-
-            /*
-             * --------------------------------------------------
-             * DATABASE SERVICE
-             * --------------------------------------------------
-             */
-
-            if (serviceType === "database") {
-
-                if (
-                    destinationNodeName !==
-                    templateNodeName
-                ) {
-
-                    throw new Error(
-                        "Database template must remain on its template node"
-                    );
-
-                }
-
-
-                vmid =
-                    await templateClient.getNextVMID();
-
-
-                console.log(
-                    `Proxmox allocated CTID ${vmid}`
-                );
-
-
-                console.log(
-                    `Cloning CT ${template.vmid} on ${templateNodeName}`
-                );
-
-
-                const cloneTask =
-                    await templateClient.cloneContainer(
-                        templateNodeName,
-                        template.vmid,
-                        vmid
-                    );
-
-
-                console.log(
-                    `Clone task started: ${cloneTask}`
-                );
-
-
-                await templateClient.waitForTask(
-                    templateNodeName,
-                    cloneTask
-                );
-
-
-                resourceCreated = true;
-                resourceNodeName =
-                    templateNodeName;
-
-
-                console.log(
-                    `CT ${vmid} successfully cloned`
-                );
-
-
-                console.log(
-                    `Configuring CT ${vmid}: ${cpu} CPU / ${ramMb} MB RAM`
-                );
-
-
-                await templateClient.setContainerResources(
-                    templateNodeName,
-                    vmid,
-                    {
-                        cores: cpu,
-                        memory: ramMb
-                    }
-                );
-
-
-                console.log(
-                    `Starting CT ${vmid}`
-                );
-
-
-                const startTask =
-                    await templateClient.startContainer(
-                        templateNodeName,
-                        vmid
-                    );
-
-
-                if (startTask) {
-
-                    await templateClient.waitForTask(
-                        templateNodeName,
-                        startTask
-                    );
-
-                }
-
-
-                console.log(
-                    `CT ${vmid} started`
-                );
-
-
-                await pool.execute(
-                    `
-                    UPDATE services
-                    SET
-                        vmid = ?,
-                        status = 'active'
-                    WHERE id = ?
-                    `,
-                    [
-                        vmid,
-                        serviceId
-                    ]
-                );
-
-
-                console.log(
-                    `Service ${serviceId} marked active`
-                );
-
-
-                return {
-                    serviceId,
-                    vmid,
-                    nodeId: selectedNode.id,
-                    nodeName: selectedNode.name,
-                    allocationId,
-                    status: "active",
-                    ipAddress: null
-                };
-
-            }
-
-
-            throw new Error(
-                `Unsupported service type: ${serviceType}`
-            );
-
-
-        } catch (error) {
-
-            console.error(
-                `Service ${serviceId} provisioning failed:`,
-                error.message
-            );
-
-
-            /*
-             * Cleanup Proxmox resource if it was created.
-             */
-
-            if (
-                resourceCreated &&
-                vmid &&
-                resourceNodeName
-            ) {
-
-                try {
-
-                    const cleanupClient =
-                        this.getClient(
-                            resourceNodeName
-                        );
-
-
-                    if (serviceType === "compute") {
-
-                        try {
-
-                            const stopTask =
-                                await cleanupClient.stopVM(
-                                    resourceNodeName,
-                                    vmid
-                                );
-
-
-                            if (stopTask) {
-
-                                await cleanupClient.waitForTask(
-                                    resourceNodeName,
-                                    stopTask
-                                );
-
-                            }
-
-                        } catch (stopError) {
-
-                            console.error(
-                                `Cleanup stop failed for VM ${vmid}:`,
-                                stopError.message
-                            );
-
-                        }
-
-
-                        try {
-
-                            const deleteTask =
-                                await cleanupClient.deleteVM(
-                                    resourceNodeName,
-                                    vmid
-                                );
-
-
-                            if (deleteTask) {
-
-                                await cleanupClient.waitForTask(
-                                    resourceNodeName,
-                                    deleteTask
-                                );
-
-                            }
-
-                        } catch (deleteError) {
-
-                            console.error(
-                                `Cleanup delete failed for VM ${vmid}:`,
-                                deleteError.message
-                            );
-
-                        }
-
-                    }
-
-
-                    if (serviceType === "database") {
-
-                        try {
-
-                            const deleteTask =
-                                await cleanupClient.deleteContainer(
-                                    resourceNodeName,
-                                    vmid
-                                );
-
-
-                            if (deleteTask) {
-
-                                await cleanupClient.waitForTask(
-                                    resourceNodeName,
-                                    deleteTask
-                                );
-
-                            }
-
-                        } catch (deleteError) {
-
-                            console.error(
-                                `Cleanup delete failed for CT ${vmid}:`,
-                                deleteError.message
-                            );
-
-                        }
-
-                    }
-
-                } catch (cleanupError) {
-
-                    console.error(
-                        "Cleanup initialization failed:",
-                        cleanupError.message
-                    );
-
-                }
-
-            }
-
-
-            /*
-             * Release TFSrun allocation.
-             */
-
-            if (serviceId) {
-
-                try {
-
-                    await resourceAllocator.release(
-                        serviceId
-                    );
-
-                } catch (releaseError) {
-
-                    console.error(
-                        "Allocation release failed:",
-                        releaseError.message
-                    );
-
-                }
-
-            }
-
-
-            /*
-             * Mark service failed.
-             */
-
-            if (serviceId) {
-
-                try {
-
-                    await pool.execute(
-                        `
-                        UPDATE services
-                        SET status = 'failed'
-                        WHERE id = ?
-                        `,
-                        [serviceId]
-                    );
-
-                } catch (statusError) {
-
-                    console.error(
-                        "Failed to mark service failed:",
-                        statusError.message
-                    );
-
-                }
-
-            }
-
-
-            throw error;
-        }
-    }
-
-
-    async getNodeById(nodeId) {
-
-        const [rows] =
-            await pool.execute(
-                `
-                SELECT
-                    id,
-                    name,
-                    host,
-                    port
-                FROM nodes
-                WHERE id = ?
-                  AND enabled = TRUE
-                `,
-                [nodeId]
-            );
-
-
-        if (!rows.length) {
-
-            throw new Error(
-                `Node ${nodeId} not found`
-            );
-
-        }
-
-
-        return rows[0];
-    }
-
-
-    async deleteService(serviceId) {
-
-        const [services] =
-            await pool.execute(
-                `
-                SELECT
-                    id,
-                    service_type,
-                    node_id,
-                    vmid,
-                    status
-                FROM services
-                WHERE id = ?
-                `,
-                [serviceId]
-            );
-
-
-        if (!services.length) {
-
-            throw new Error(
-                `Service ${serviceId} not found`
-            );
-
-        }
-
-
-        const service =
-            services[0];
-
-
-        if (service.status === "deleted") {
-
-            return {
-                serviceId,
-                status: "deleted"
-            };
-
-        }
-
-
-        await pool.execute(
-            `
-            UPDATE services
-            SET status = 'deleting'
-            WHERE id = ?
-            `,
-            [serviceId]
+            error.message
         );
 
 
-        const node =
-            await this.getNodeById(
-                service.node_id
-            );
+        /*
+         * Remove partially-created Proxmox VM.
+         */
+
+        if (
+            vmid &&
+            node
+        ) {
+
+            try {
+
+                const proxmox =
+                    getProxmoxClient(
+                        node.name
+                    );
 
 
-        const client =
-            this.getClient(
-                node.name
-            );
+                try {
+
+                    const status =
+                        await proxmox.getVMStatus(
+                            vmid
+                        );
 
 
-        try {
-
-            if (service.vmid) {
-
-                if (
-                    service.service_type ===
-                    "compute"
-                ) {
-
-                    /*
-                     * Try to stop the VM.
-                     *
-                     * We intentionally do not call
-                     * getVMStatus(), because that method
-                     * does not exist in ProxmoxClient.
-                     */
-
-                    try {
+                    if (
+                        status ===
+                        "running"
+                    ) {
 
                         const stopTask =
-                            await client.stopVM(
-                                node.name,
-                                service.vmid
+                            await proxmox.stopVM(
+                                vmid
                             );
 
 
                         if (stopTask) {
 
-                            await client.waitForTask(
-                                node.name,
+                            await proxmox.waitForTask(
                                 stopTask
                             );
-
                         }
-
-                    } catch (stopError) {
-
-                        console.error(
-                            `Stop VM failed: ${stopError.message}`
-                        );
-
                     }
 
-
-                    /*
-                     * Destroy the VM after the stop attempt.
-                     */
-
-                    const deleteTask =
-                        await client.deleteVM(
-                            node.name,
-                            service.vmid
-                        );
+                } catch (_) {}
 
 
-                    if (deleteTask) {
+                try {
 
-                        await client.waitForTask(
-                            node.name,
-                            deleteTask
-                        );
+                    await proxmox.deleteVM(
+                        vmid
+                    );
 
-                    }
+                } catch (_) {}
 
-                }
+            } catch (_) {}
+        }
 
 
-                if (
-                    service.service_type ===
-                    "database"
+        /*
+         * Release allocation and mark
+         * service failed.
+         */
+
+        if (
+            serviceId
+        ) {
+
+            try {
+
+                const cleanupConnection =
+                    await pool.getConnection();
+
+
+                try {
+
+                    await cleanupConnection
+                        .beginTransaction();
+
+
+                    await cleanupConnection.execute(
+
+                        `
+                        UPDATE allocations
+
+                        SET
+
+                            status =
+                                'released',
+
+                            released_at =
+                                NOW()
+
+                        WHERE
+
+                            service_id = ?
+
+                            AND status =
+                                'active'
+                        `,
+
+                        [
+                            serviceId
+                        ]
+                    );
+
+
+                    await cleanupConnection.execute(
+
+                        `
+                        UPDATE services
+
+                        SET status =
+                            'failed'
+
+                        WHERE id = ?
+                        `,
+
+                        [
+                            serviceId
+                        ]
+                    );
+
+
+                    await cleanupConnection
+                        .commit();
+
+                } catch (
+                    cleanupError
                 ) {
 
-                    const deleteTask =
-                        await client.deleteContainer(
-                            node.name,
-                            service.vmid
-                        );
+                    try {
 
+                        await cleanupConnection
+                            .rollback();
 
-                    if (deleteTask) {
+                    } catch (_) {}
 
-                        await client.waitForTask(
-                            node.name,
-                            deleteTask
-                        );
+                } finally {
 
-                    }
-
+                    cleanupConnection
+                        .release();
                 }
 
-            }
-
-
-            /*
-             * Release resources only after the
-             * Proxmox resource was successfully deleted.
-             */
-
-            await resourceAllocator.release(
-                serviceId
-            );
-
-
-            await pool.execute(
-                `
-                UPDATE services
-                SET status = 'deleted'
-                WHERE id = ?
-                `,
-                [serviceId]
-            );
-
-
-            return {
-                serviceId,
-                status: "deleted"
-            };
-
-
-        } catch (error) {
-
-            /*
-             * The Proxmox resource was not successfully
-             * deleted, therefore do NOT release its
-             * allocation.
-             */
-
-            await pool.execute(
-                `
-                UPDATE services
-                SET status = 'failed'
-                WHERE id = ?
-                `,
-                [serviceId]
-            );
-
-
-            throw error;
+            } catch (_) {}
         }
+
+
+        throw error;
     }
 }
 
 
-module.exports =
-    new ServiceManager();
+/* =========================================================
+   STOP SERVICE
+========================================================= */
+
+async function stopService(
+    serviceId
+) {
+
+    const service =
+        await getService(
+            serviceId
+        );
+
+
+    if (!service) {
+
+        throw new Error(
+            "Service not found"
+        );
+    }
+
+
+    if (!service.vmid) {
+
+        throw new Error(
+            "Service does not have a VM"
+        );
+    }
+
+
+    const proxmox =
+        getProxmoxClient(
+            service.node_name
+        );
+
+
+    const status =
+        await proxmox.getVMStatus(
+            service.vmid
+        );
+
+
+    if (
+        status ===
+        "running"
+    ) {
+
+        const task =
+            await proxmox.stopVM(
+                service.vmid
+            );
+
+
+        if (task) {
+
+            await proxmox.waitForTask(
+                task
+            );
+        }
+    }
+
+
+    /*
+     * IMPORTANT:
+     *
+     * Stopping a VM does NOT release
+     * its resources.
+     */
+
+    await pool.execute(
+
+        `
+        UPDATE services
+
+        SET status =
+            'stopped'
+
+        WHERE id = ?
+        `,
+
+        [
+            serviceId
+        ]
+    );
+
+
+    return getService(
+        serviceId
+    );
+}
+
+
+/* =========================================================
+   START SERVICE
+========================================================= */
+
+async function startService(
+    serviceId
+) {
+
+    const service =
+        await getService(
+            serviceId
+        );
+
+
+    if (!service) {
+
+        throw new Error(
+            "Service not found"
+        );
+    }
+
+
+    if (!service.vmid) {
+
+        throw new Error(
+            "Service does not have a VM"
+        );
+    }
+
+
+    const proxmox =
+        getProxmoxClient(
+            service.node_name
+        );
+
+
+    const status =
+        await proxmox.getVMStatus(
+            service.vmid
+        );
+
+
+    if (
+        status !==
+        "running"
+    ) {
+
+        const task =
+            await proxmox.startVM(
+                service.vmid
+            );
+
+
+        if (task) {
+
+            await proxmox.waitForTask(
+                task
+            );
+        }
+    }
+
+
+    await proxmox.waitForGuestAgent(
+        service.vmid
+    );
+
+
+    const ip =
+        await proxmox.waitForVMIPv4(
+            service.vmid
+        );
+
+
+    await pool.execute(
+
+        `
+        UPDATE services
+
+        SET
+
+            ip_address = ?,
+
+            status =
+                'active'
+
+        WHERE id = ?
+        `,
+
+        [
+
+            ip,
+
+            serviceId
+        ]
+    );
+
+
+    return getService(
+        serviceId
+    );
+}
+
+
+/* =========================================================
+   DELETE SERVICE
+========================================================= */
+
+async function deleteService(
+    serviceId
+) {
+
+    const service =
+        await getService(
+            serviceId
+        );
+
+
+    if (!service) {
+
+        throw new Error(
+            "Service not found"
+        );
+    }
+
+
+    if (
+        service.status ===
+        "deleted"
+    ) {
+
+        return service;
+    }
+
+
+    await pool.execute(
+
+        `
+        UPDATE services
+
+        SET status =
+            'deleting'
+
+        WHERE id = ?
+        `,
+
+        [
+            serviceId
+        ]
+    );
+
+
+    try {
+
+        /*
+         * Delete Proxmox VM.
+         */
+
+        if (
+            service.vmid &&
+            service.node_name
+        ) {
+
+            const proxmox =
+                getProxmoxClient(
+                    service.node_name
+                );
+
+
+            try {
+
+                const status =
+                    await proxmox.getVMStatus(
+                        service.vmid
+                    );
+
+
+                if (
+                    status ===
+                    "running"
+                ) {
+
+                    const task =
+                        await proxmox.stopVM(
+                            service.vmid
+                        );
+
+
+                    if (task) {
+
+                        await proxmox.waitForTask(
+                            task
+                        );
+                    }
+                }
+
+            } catch (error) {
+
+                if (
+                    !error.message.includes(
+                        "does not exist"
+                    ) &&
+
+                    !error.message.includes(
+                        "Configuration file"
+                    )
+                ) {
+
+                    throw error;
+                }
+            }
+
+
+            try {
+
+                await proxmox.deleteVM(
+                    service.vmid
+                );
+
+            } catch (error) {
+
+                if (
+                    !error.message.includes(
+                        "does not exist"
+                    ) &&
+
+                    !error.message.includes(
+                        "Configuration file"
+                    )
+                ) {
+
+                    throw error;
+                }
+            }
+        }
+
+
+        /*
+         * Release resources ONLY when
+         * the service is actually deleted.
+         */
+
+        await pool.execute(
+
+            `
+            UPDATE allocations
+
+            SET
+
+                status =
+                    'released',
+
+                released_at =
+                    NOW()
+
+            WHERE
+
+                service_id = ?
+
+                AND status =
+                    'active'
+            `,
+
+            [
+                serviceId
+            ]
+        );
+
+
+        /*
+         * Keep the service record for History.
+         */
+
+        await pool.execute(
+
+            `
+            UPDATE services
+
+            SET status =
+                'deleted'
+
+            WHERE id = ?
+            `,
+
+            [
+                serviceId
+            ]
+        );
+
+
+        return getService(
+            serviceId
+        );
+
+
+    } catch (error) {
+
+        await pool.execute(
+
+            `
+            UPDATE services
+
+            SET status =
+                'failed'
+
+            WHERE id = ?
+            `,
+
+            [
+                serviceId
+            ]
+        );
+
+
+        throw error;
+    }
+}
+
+
+/* =========================================================
+   EXPORTS
+========================================================= */
+
+module.exports = {
+
+    validateComputeRequest,
+
+    getService,
+
+    getServices,
+
+    getServiceHistory,
+
+    createComputeService,
+
+    startService,
+
+    stopService,
+
+    deleteService,
+
+    getNodeById
+};

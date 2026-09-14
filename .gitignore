@@ -1,5 +1,5 @@
 # Environment / secrets
-.env
+# The development .env is intentionally committed for this repository.
 .env.*
 !.env.example
 

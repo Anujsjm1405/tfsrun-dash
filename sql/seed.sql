@@ -1,5 +1,9 @@
 USE tfsrun;
 
+-- =========================================================
+-- NODES
+-- =========================================================
+
 INSERT INTO nodes (
     name,
     host,
@@ -8,8 +12,9 @@ INSERT INTO nodes (
     reserved_cpu,
     total_ram_mb,
     reserved_ram_mb,
-    total_storage_gb,
-    reserved_storage_gb
+    total_local_storage_gb,
+    total_ssd_storage_gb,
+    enabled
 )
 VALUES
 (
@@ -21,7 +26,8 @@ VALUES
     12288,
     4096,
     794.30,
-    0
+    238.50,
+    TRUE
 ),
 (
     'node2',
@@ -31,8 +37,9 @@ VALUES
     2,
     16384,
     4096,
-    1000,
-    0
+    794.30,
+    0.00,
+    TRUE
 ),
 (
     'node3',
@@ -43,49 +50,139 @@ VALUES
     16384,
     4096,
     794.30,
-    0
-)
-ON DUPLICATE KEY UPDATE
-    total_cpu = VALUES(total_cpu),
-    reserved_cpu = VALUES(reserved_cpu),
-    total_ram_mb = VALUES(total_ram_mb),
-    reserved_ram_mb = VALUES(reserved_ram_mb),
-    total_storage_gb = VALUES(total_storage_gb);
+    238.50,
+    TRUE
+);
 
+
+-- =========================================================
+-- COMPUTE TEMPLATES
+-- =========================================================
+
+-- Node1: existing prepared compute template
 INSERT INTO templates (
     service_type,
     node_id,
     vmid,
     name,
-    storage_gb
+    storage_gb,
+    enabled
 )
 SELECT
     'compute',
     id,
-    100,
-    'Compute Template',
-    32
+    111,
+    'tfsrun-ubuntu-template-node1',
+    32.00,
+    TRUE
 FROM nodes
-WHERE name = 'node1'
-ON DUPLICATE KEY UPDATE
-    name = VALUES(name),
-    storage_gb = VALUES(storage_gb);
+WHERE name = 'node1';
+
+
+-- Node2: existing prepared compute template
+INSERT INTO templates (
+    service_type,
+    node_id,
+    vmid,
+    name,
+    storage_gb,
+    enabled
+)
+SELECT
+    'compute',
+    id,
+    112,
+    'tfsrun-compute-template-node2',
+    32.00,
+    TRUE
+FROM nodes
+WHERE name = 'node2';
+
+
+-- =========================================================
+-- DATABASE TEMPLATE
+-- Metadata only.
+-- Database provisioning is NOT enabled yet.
+-- =========================================================
 
 INSERT INTO templates (
     service_type,
     node_id,
     vmid,
     name,
-    storage_gb
+    storage_gb,
+    enabled
 )
 SELECT
     'database',
     id,
     999,
-    'Database Template',
-    8
+    'db-clean-master',
+    8.00,
+    TRUE
 FROM nodes
-WHERE name = 'node2'
-ON DUPLICATE KEY UPDATE
-    name = VALUES(name),
-    storage_gb = VALUES(storage_gb);
+WHERE name = 'node3';
+
+
+-- =========================================================
+-- S3 INFRASTRUCTURE SERVICE
+-- Existing permanent VM 105 on node1.
+-- =========================================================
+
+INSERT INTO services (
+    service_type,
+    name,
+    owner_id,
+    node_id,
+    vmid,
+    ip_address,
+    status
+)
+SELECT
+    'storage',
+    'S3 Infrastructure',
+    NULL,
+    id,
+    105,
+    NULL,
+    'active'
+FROM nodes
+WHERE name = 'node1';
+
+
+-- =========================================================
+-- S3 RESOURCE ALLOCATION
+-- VM 105 permanently consumes:
+-- CPU  = 4 cores
+-- RAM  = 5 GB
+-- SSD  = 238.50 GB
+-- =========================================================
+
+INSERT INTO allocations (
+    service_id,
+    node_id,
+    cpu,
+    ram_mb,
+    storage_gb,
+    storage_type,
+    allocation_type,
+    description,
+    status
+)
+SELECT
+    s.id,
+    s.node_id,
+    4,
+    5120,
+    238.50,
+    'ssd',
+    'infrastructure',
+    'Permanent S3 VM 105 and SSD storage',
+    'active'
+FROM services s
+JOIN nodes n
+    ON n.id = s.node_id
+WHERE
+    s.service_type = 'storage'
+    AND s.vmid = 105
+    AND n.name = 'node1';

@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        <%= title %>
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="/xterm/css/xterm.css"
+    >
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+            background: #f4f6f8;
+            color: #1f2937;
+        }
+
+        .topbar {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .brand {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .nav a,
+        .nav button {
+            border: 0;
+            background: transparent;
+            color: #374151;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .container {
+            padding: 24px;
+        }
+
+        .header {
+            margin-bottom: 18px;
+        }
+
+        .header h1 {
+            margin: 0 0 6px;
+            font-size: 26px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #6b7280;
+        }
+
+        .terminal-card {
+            display: flex;
+            flex-direction: column;
+            background: #111827;
+            width: 100vw;
+            height: 100vh;
+            min-height: 0;
+            border-radius: 0;
+            overflow: hidden;
+            border: 1px solid #1f2937;
+        }
+
+        .terminal-toolbar {
+            height: 46px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 14px;
+            background: #1f2937;
+            color: #e5e7eb;
+        }
+
+        .status {
+            font-size: 13px;
+        }
+
+        .status.connected {
+            color: #86efac;
+        }
+
+        .status.error {
+            color: #fca5a5;
+        }
+
+        .toolbar-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .toolbar-buttons button {
+            padding: 6px 10px;
+            border: 1px solid #4b5563;
+            border-radius: 5px;
+            background: #374151;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .toolbar-buttons button:hover {
+            background: #4b5563;
+        }
+
+        #terminal {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            overflow: hidden;
+            background: #000000;
+        }
+
+        .terminal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            background: #000000;
+        }
+
+        #terminal .xterm,
+        #terminal .xterm-screen,
+        #terminal .xterm-rows,
+        #terminal .xterm-viewport,
+        #terminal .xterm-helper-textarea,
+        #terminal canvas {
+            background: #000000 !important;
+        }
+
+        #terminal .xterm {
+            width: 100%;
+            height: 100%;
+        }
+
+        #terminal,
+        #terminal .xterm,
+        #terminal .xterm-screen,
+        #terminal .xterm-rows,
+        #terminal .xterm-viewport,
+        #terminal .xterm-helper-textarea,
+        #terminal canvas {
+            letter-spacing: normal !important;
+        }
+
+    </style>
+
+</head>
+
+<body
+    data-terminal-service-id="<%= serviceId %>"
+    data-terminal-service-name="<%= service.name %>"
+>
+
+    <div class="terminal-card">
+
+            <div class="terminal-toolbar">
+
+                <div
+                    id="terminalStatus"
+                    class="status"
+                >
+                    Connecting...
+                </div>
+
+                <div class="toolbar-buttons">
+
+                    <button
+                        id="reconnectButton"
+                        type="button"
+                    >
+                        Reconnect
+                    </button>
+
+                    <button
+                        id="disconnectButton"
+                        type="button"
+                    >
+                        Disconnect
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="terminal-body">
+                <div id="terminal"></div>
+            </div>
+
+    </div>
+
+
+    <script
+        src="/xterm/lib/xterm.js"
+    ></script>
+
+    <script
+        src="/xterm-addon-fit/lib/xterm-addon-fit.js"
+    ></script>
+
+    <script
+        src="/js/terminal.js"
+    ></script>
+
+</body>
+
+</html>

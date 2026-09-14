@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body class="admin-page">
+
+<header class="topbar">
+
+    <div class="brand">
+        <span class="brand-mark" aria-hidden="true">+</span>
+
+        <div>
+        <h1>TFSrun</h1>
+            <span class="brand-subtitle">Admin Dashboard</span>
+        </div>
+    </div>
+
+    <div class="user-info">
+        <span class="account-label">ADMIN ACCOUNT</span>
+
+        <span>
+            <strong><%= user.name || user.username %></strong>
+            <small>Administrator</small>
+        </span>
+
+        <button id="logoutBtn" class="secondary-btn">
+            Logout
+        </button>
+    </div>
+</header>
+
+<main class="container admin-container">
+
+    <section class="admin-section">
+        <div class="section-header admin-section-header">
+            <h2>Infrastructure Resources</h2>
+            <button id="refreshResourcesBtn" class="secondary-btn">
+                Refresh
+            </button>
+        </div>
+
+        <div id="resources" class="node-grid admin-node-grid">
+            <p>Loading resources...</p>
+        </div>
+    </section>
+
+    <section class="admin-section">
+        <div class="section-header admin-section-header">
+            <h2>All Services</h2>
+            <button id="refreshServicesBtn" class="secondary-btn">
+                Refresh
+            </button>
+        </div>
+
+        <div id="services" class="admin-services">
+            <p>Loading services...</p>
+        </div>
+    </section>
+
+</main>
+
+<script src="/js/admin-dashboard.js"></script>
+
+</body>
+</html>

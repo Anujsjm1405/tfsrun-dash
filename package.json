@@ -10,9 +10,15 @@
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.20.0",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
+    "ejs": "^6.0.1",
     "express": "^5.2.1",
-    "mysql2": "^3.24.4"
+    "express-session": "^1.19.0",
+    "mysql2": "^3.24.4",
+    "ws": "^8.21.3",
+    "xterm": "^5.3.0",
+    "xterm-addon-fit": "^0.8.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

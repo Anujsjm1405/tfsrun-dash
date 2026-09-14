@@ -2,8 +2,13 @@ CREATE DATABASE IF NOT EXISTS tfsrun;
 
 USE tfsrun;
 
-CREATE TABLE IF NOT EXISTS nodes (
+-- =========================================================
+-- NODES
+-- =========================================================
+
+CREATE TABLE nodes (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+
     name VARCHAR(50) NOT NULL UNIQUE,
     host VARCHAR(255) NOT NULL UNIQUE,
     port INT UNSIGNED NOT NULL DEFAULT 8006,
@@ -14,8 +19,8 @@ CREATE TABLE IF NOT EXISTS nodes (
     total_ram_mb INT UNSIGNED NOT NULL,
     reserved_ram_mb INT UNSIGNED NOT NULL DEFAULT 4096,
 
-    total_storage_gb DECIMAL(10,2) NOT NULL DEFAULT 0,
-    reserved_storage_gb DECIMAL(10,2) NOT NULL DEFAULT 0,
+    total_local_storage_gb DECIMAL(10,2) NOT NULL DEFAULT 0,
+    total_ssd_storage_gb DECIMAL(10,2) NOT NULL DEFAULT 0,
 
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
 
@@ -24,7 +29,12 @@ CREATE TABLE IF NOT EXISTS nodes (
         ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS services (
+
+-- =========================================================
+-- SERVICES
+-- =========================================================
+
+CREATE TABLE services (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
     service_type ENUM(
@@ -41,6 +51,8 @@ CREATE TABLE IF NOT EXISTS services (
 
     vmid INT UNSIGNED NULL,
 
+    ip_address VARCHAR(45) NULL,
+
     status ENUM(
         'provisioning',
         'active',
@@ -55,24 +67,42 @@ CREATE TABLE IF NOT EXISTS services (
         ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (node_id)
-        REFERENCES nodes(id)
+        REFERENCES nodes(id),
+
+    INDEX idx_services_node (node_id),
+    INDEX idx_services_status (status),
+    INDEX idx_services_type (service_type)
 );
 
-CREATE TABLE IF NOT EXISTS allocations (
+
+-- =========================================================
+-- RESOURCE ALLOCATIONS
+-- =========================================================
+
+CREATE TABLE allocations (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
     service_id BIGINT UNSIGNED NOT NULL,
+
     node_id INT UNSIGNED NOT NULL,
 
     cpu INT UNSIGNED NOT NULL DEFAULT 0,
+
     ram_mb INT UNSIGNED NOT NULL DEFAULT 0,
+
     storage_gb DECIMAL(10,2) NOT NULL DEFAULT 0,
 
     storage_type ENUM(
         'local',
-        'ssd',
-        'nfs'
+        'ssd'
     ) NOT NULL DEFAULT 'local',
+
+    allocation_type ENUM(
+        'service',
+        'infrastructure'
+    ) NOT NULL DEFAULT 'service',
+
+    description VARCHAR(255) NULL,
 
     status ENUM(
         'active',
@@ -80,6 +110,7 @@ CREATE TABLE IF NOT EXISTS allocations (
     ) NOT NULL DEFAULT 'active',
 
     allocated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
     released_at TIMESTAMP NULL,
 
     FOREIGN KEY (service_id)
@@ -95,10 +126,21 @@ CREATE TABLE IF NOT EXISTS allocations (
 
     INDEX idx_allocations_service (
         service_id
+    ),
+
+    INDEX idx_allocations_storage (
+        node_id,
+        storage_type,
+        status
     )
 );
 
-CREATE TABLE IF NOT EXISTS templates (
+
+-- =========================================================
+-- PROXMOX TEMPLATES
+-- =========================================================
+
+CREATE TABLE templates (
     id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
 
     service_type ENUM(
@@ -118,8 +160,17 @@ CREATE TABLE IF NOT EXISTS templates (
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-    UNIQUE KEY unique_template_vmid (node_id, vmid),
+    UNIQUE KEY unique_template_vmid (
+        node_id,
+        vmid
+    ),
 
     FOREIGN KEY (node_id)
-        REFERENCES nodes(id)
+        REFERENCES nodes(id),
+
+    INDEX idx_templates_lookup (
+        service_type,
+        node_id,
+        enabled
+    )
 );
