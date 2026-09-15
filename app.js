@@ -30,6 +30,9 @@ const {
     requireAdmin
 } = require("./src/auth/authMiddleware");
 
+const s3Routes =
+    require("./src/s3/s3Routes");
+
 const app = express();
 
 const server =
@@ -114,6 +117,8 @@ app.use(
 const sessionMiddleware =
     session({
 
+        name: "tfsrun.sid",
+
         secret:
             process.env.SESSION_SECRET ||
             "tfsrun-session-secret",
@@ -128,7 +133,9 @@ const sessionMiddleware =
 
             sameSite: "lax",
 
-            secure: false
+            secure: process.env.NODE_ENV === "production",
+
+            maxAge: 8 * 60 * 60 * 1000
         }
     });
 
@@ -436,6 +443,16 @@ app.get(
 app.use(
     "/student/compute",
     terminalRoutes
+);
+
+
+// --------------------------------------------------
+// S3 routes
+// --------------------------------------------------
+
+app.use(
+    "/student/s3",
+    s3Routes
 );
 
 
@@ -1620,6 +1637,20 @@ app.use(
         );
     }
 );
+
+
+// --------------------------------------------------
+// Global error handlers
+// --------------------------------------------------
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+    console.error("Uncaught Exception:", error);
+    process.exit(1);
+});
 
 
 // --------------------------------------------------

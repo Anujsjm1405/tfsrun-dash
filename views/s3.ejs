@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TFSrun - Storage</title>
+  <style>
+    :root { --bg:#f5f6f8; --surface:#fff; --border:#e5e7eb; --text:#111827; --muted:#6b7280; --primary:#111827; --danger:#b91c1c; --success:#047857; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; background:var(--bg); color:var(--text); padding:32px 16px; }
+    .container { max-width:1100px; margin:auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,.05); }
+    .header { padding:22px 26px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    h1 { font-size:20px; } h2 { font-size:16px; margin-bottom:12px; } p { line-height:1.5; }
+    .content { padding:26px; } .login { max-width:460px; margin:20px auto; text-align:center; }
+    .muted { color:var(--muted); } .small { font-size:13px; }
+    .section { margin-bottom:30px; } .section-title { text-transform:uppercase; letter-spacing:.08em; font-size:12px; font-weight:700; color:var(--muted); padding-bottom:9px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    input[type=text],input[type=password],input[type=file] { flex:1; min-width:180px; padding:10px 12px; border:1px solid #d1d5db; border-radius:6px; font:inherit; }
+    .btn { border:0; border-radius:6px; padding:10px 15px; font:inherit; font-weight:600; cursor:pointer; text-decoration:none; display:inline-block; }
+    .primary { background:var(--primary); color:#fff; } .danger { background:#fff; color:var(--danger); border:1px solid #fecaca; } .btn:hover { opacity:.86; }
+    .alert { padding:12px 14px; border-radius:6px; margin-bottom:20px; font-size:14px; } .error { background:#fef2f2; border:1px solid #fecaca; color:var(--danger); } .success { background:#ecfdf5; border:1px solid #a7f3d0; color:var(--success); } .info { background:#eff6ff; border:1px solid #bfdbfe; color:#1d4ed8; }
+    table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:13px 10px; border-bottom:1px solid var(--border); font-size:14px; vertical-align:top; } th { color:var(--muted); font-weight:600; }
+    td:last-child,th:last-child { text-align:right; } code { background:#f3f4f6; border-radius:4px; padding:2px 5px; font-size:90%; word-break:break-all; }
+    .actions { display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; } .card { border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:12px; }
+    .credential-grid { display:grid; grid-template-columns:150px 1fr; gap:8px 14px; align-items:start; }
+    @media (max-width:650px) { .credential-grid { grid-template-columns:1fr; gap:4px; } .header { align-items:flex-start; flex-direction:column; } td:last-child,th:last-child { text-align:left; } }
+  </style>
+  <link rel="stylesheet" href="/css/s3.css">
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <div><h1>Storage</h1><p class="muted small">Signed in as <strong><%= user %></strong>.</p></div>
+      <a href="/api/auth/logout" class="btn danger">Log out</a>
+    </header>
+    <section class="content">
+      <% if (error) { %><div class="alert error"><%= error %></div><% } %>
+      <% if (success) { %><div class="alert success"><%= success %></div><% } %>
+
+      <section class="section">
+        <div class="section-title">Your buckets</div>
+        <div class="card">
+          <form action="/student/s3/create-bucket" method="post" class="row">
+            <input type="text" name="label" placeholder="New bucket label, e.g. backups" pattern="[A-Za-z0-9-]{1,24}" required>
+            <button class="btn primary" type="submit">Create bucket</button>
+          </form>
+          <p class="muted small" style="margin-top:8px;">Only buckets owned by your account are shown.</p>
+        </div>
+        <table><thead><tr><th>Bucket</th><th>Created</th><th>Actions</th></tr></thead><tbody>
+          <% if (!buckets.length) { %><tr><td colspan="3" class="muted" style="text-align:center;">No buckets yet.</td></tr><% } %>
+          <% buckets.forEach(item => { %>
+            <tr><td><code><%= item.name %></code><% if (item.name === bucket) { %> <strong>(selected)</strong><% } %></td><td class="muted"><%= item.createdAt ? new Date(item.createdAt).toLocaleString() : '—' %></td><td><div class="actions"><form action="/student/s3/select-bucket" method="post"><input type="hidden" name="bucketName" value="<%= item.name %>"><button class="btn primary" type="submit">Open</button></form></div></td></tr>
+          <% }) %>
+        </tbody></table>
+      </section>
+
+      <section class="section">
+        <div class="section-title">Selected bucket: <code><%= bucket %></code></div>
+        <form action="/student/s3/upload" method="post" enctype="multipart/form-data"><div class="row"><input type="file" name="file" required><button class="btn primary" type="submit">Upload</button></div></form>
+        <p class="muted small" style="margin-top:8px;">Development upload limit: 25 MB. Files are stored in the selected user-owned bucket.</p>
+      </section>
+
+      <section class="section">
+        <div class="section-title">Files in selected bucket</div>
+        <table><thead><tr><th>File name</th><th>Size</th><th>Actions</th></tr></thead><tbody>
+          <% if (!files.length) { %><tr><td colspan="3" class="muted" style="text-align:center;">Bucket is empty.</td></tr><% } %>
+          <% files.forEach(file => { %><tr><td><%= file.Key %></td><td class="muted"><%= (Number(file.Size || 0) / 1024).toFixed(1) %> KB</td><td><div class="actions"><a class="btn primary" href="/student/s3/download?key=<%= encodeURIComponent(file.Key) %>">Download</a><form action="/student/s3/delete" method="post"><input type="hidden" name="key" value="<%= file.Key %>"><button class="btn danger" type="submit">Delete</button></form></div></td></tr><% }) %>
+        </tbody></table>
+      </section>
+    </section>
+  </main>
+  <script src="/js/s3.js"></script>
+</body>
+</html>

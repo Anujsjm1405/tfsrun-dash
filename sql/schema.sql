@@ -3,6 +3,25 @@ CREATE DATABASE IF NOT EXISTS tfsrun;
 USE tfsrun;
 
 -- =========================================================
+-- USERS
+-- =========================================================
+
+CREATE TABLE users (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    prn VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    username VARCHAR(50) DEFAULT NULL UNIQUE,
+    email VARCHAR(255) DEFAULT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('student', 'admin') NOT NULL DEFAULT 'student',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_users_prn (prn),
+    INDEX idx_users_role (role)
+);
+
+-- =========================================================
 -- NODES
 -- =========================================================
 
@@ -68,6 +87,10 @@ CREATE TABLE services (
 
     FOREIGN KEY (node_id)
         REFERENCES nodes(id),
+
+    FOREIGN KEY (owner_id)
+        REFERENCES users(id)
+        ON DELETE SET NULL,
 
     INDEX idx_services_node (node_id),
     INDEX idx_services_status (status),
