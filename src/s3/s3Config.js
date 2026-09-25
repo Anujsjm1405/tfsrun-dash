@@ -2,9 +2,17 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 
+function isExecutableFile(p) {
+    try {
+        return fs.statSync(p).isFile();
+    } catch (_) {
+        return false;
+    }
+}
+
 function resolveMcPath() {
     const envPath = process.env.MINIO_MC_PATH;
-    if (envPath && fs.existsSync(envPath)) return envPath;
+    if (envPath && isExecutableFile(envPath)) return envPath;
     const candidates = [
         "mc",
         path.join(process.env.HOME || process.env.USERPROFILE || "", "mc"),
@@ -16,7 +24,7 @@ function resolveMcPath() {
     ];
     for (const p of candidates) {
         try {
-            if (fs.existsSync(p)) return p;
+            if (isExecutableFile(p)) return p;
         } catch (_) {}
     }
     return "mc";
@@ -28,7 +36,6 @@ const s3Config = {
     accessKeyId: process.env.S3_ACCESS_KEY || "",
     secretAccessKey: process.env.S3_SECRET_KEY || "",
     sessionSecret: process.env.SESSION_SECRET || "tfsrun-session-secret",
-    maxUploadBytes: 25 * 1024 * 1024,
     sessionTtlMs: 8 * 60 * 60 * 1000,
     mcPath: resolveMcPath(),
     mcAlias: process.env.MINIO_ALIAS || "localminio"

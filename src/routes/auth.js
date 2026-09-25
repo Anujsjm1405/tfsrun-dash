@@ -216,25 +216,39 @@ router.post(
 router.post(
     "/api/auth/logout",
     (req, res) => {
+        const wantsJson =
+            req.accepts(["html", "json"]) === "json";
+
         req.session.destroy(
             error => {
                 if (error) {
                     console.error(error);
 
-                    return res.status(500).json({
-                        success: false,
-                        error:
-                            "Logout failed"
+                    if (wantsJson) {
+                        return res.status(500).json({
+                            success: false,
+                            error:
+                                "Logout failed"
+                        });
+                    }
+
+                    return res.redirect("/login");
+                }
+
+                // Clear the session cookie itself (name + options must match app.js).
+                res.clearCookie("tfsrun.sid", {
+                    httpOnly: true,
+                    sameSite: "lax",
+                    secure: process.env.NODE_ENV === "production"
+                });
+
+                if (wantsJson) {
+                    return res.json({
+                        success: true
                     });
                 }
 
-                res.clearCookie(
-                    "tfsrun.sid"
-                );
-
-                res.json({
-                    success: true
-                });
+                return res.redirect("/login");
             }
         );
     }

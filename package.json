@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "setup-db": "node scripts/setup-db.js",
+    "start": "node app.js",
+    "dev": "nodemon app.js"
   },
   "keywords": [],
   "type": "commonjs",

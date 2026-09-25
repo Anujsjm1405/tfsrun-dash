@@ -1,164 +1,553 @@
-.s3-page {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 32px 16px;
+/* ==========================================
+   S3 Storage page — continues the main
+   dashboard "technical" theme
+   (ink topbar, signal red, dot-grid paper)
+   ========================================== */
+
+:root {
+    --ink: #101010;
+    --paper: #f3f3f0;
+    --line: #d7d7d2;
+    --muted: #73736e;
+    --signal: #e21b23;
 }
 
-.s3-header {
+.s3-page {
+    margin: 0;
+    background:
+        radial-gradient(#d4d4cf 0.8px, transparent 0.8px) 0 0 / 18px 18px,
+        var(--paper);
+    color: var(--ink);
+    font-family: "Inter", Arial, sans-serif;
+}
+
+.s3-page *,
+.s3-page *::before,
+.s3-page *::after {
+    box-sizing: border-box;
+}
+
+.s3-page code {
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+}
+
+/* ---------- Topbar (shared with dashboard) ---------- */
+
+.s3-page .topbar {
+    height: 76px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 22px 26px;
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    margin-bottom: 24px;
+    padding: 0 42px;
+    background: var(--ink);
+    border-bottom: 3px solid var(--signal);
 }
 
-.s3-header h1 {
-    font-size: 20px;
+.s3-page .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    letter-spacing: -0.06em;
+}
+
+.s3-page .brand h1 {
     margin: 0;
-}
-
-.s3-content {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 26px;
-}
-
-.s3-section {
-    margin-bottom: 30px;
-}
-
-.s3-section-title {
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-size: 12px;
-    font-weight: 700;
-    color: #6b7280;
-    padding-bottom: 9px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid #e5e7eb;
-}
-
-.s3-alert {
-    padding: 12px 14px;
-    border-radius: 6px;
-    margin-bottom: 20px;
-    font-size: 14px;
-}
-
-.s3-alert.error {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
-    color: #b91c1c;
-}
-
-.s3-alert.success {
-    background: #ecfdf5;
-    border: 1px solid #a7f3d0;
-    color: #047857;
-}
-
-.s3-alert.info {
-    background: #eff6ff;
-    border: 1px solid #bfdbfe;
-    color: #1d4ed8;
-}
-
-.s3-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.s3-table th,
-.s3-table td {
-    text-align: left;
-    padding: 13px 10px;
-    border-bottom: 1px solid #e5e7eb;
-    font-size: 14px;
-    vertical-align: top;
-}
-
-.s3-table th {
-    color: #6b7280;
-    font-weight: 600;
-}
-
-.s3-table td:last-child,
-.s3-table th:last-child {
-    text-align: right;
-}
-
-.s3-btn {
-    border: 0;
-    border-radius: 6px;
-    padding: 10px 15px;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.s3-btn.primary {
-    background: #111827;
+    font-size: 25px;
+    font-weight: 800;
     color: #fff;
 }
 
-.s3-btn.danger {
+.s3-page .brand-mark {
+    display: grid;
+    width: 29px;
+    height: 29px;
+    place-items: center;
+    color: var(--ink);
+    background: var(--signal);
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 1;
+}
+
+.s3-page .brand-subtitle {
+    color: #9ca3af;
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.s3-page .user-info {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    color: #d8d8d4;
+    font-size: 13px;
+}
+
+.s3-page .user-info strong {
+    color: #fff;
+}
+
+.s3-page .account-label {
+    color: var(--signal);
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.s3-page .logout-form {
+    display: inline;
+}
+
+.s3-page .secondary-btn {
+    border: 1px solid #666660;
+    border-radius: 0;
+    background: transparent;
+    color: #fff;
+    padding: 9px 14px;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.s3-page .secondary-btn:hover {
+    border-color: var(--signal);
+    background: var(--signal);
+}
+
+/* ---------- Layout ---------- */
+
+.s3-page .container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 48px 42px 90px;
+}
+
+.s3-page .section {
+    margin-bottom: 34px;
+}
+
+.s3-page .page-header {
+    position: relative;
+    margin-bottom: 44px;
+    border-left: 4px solid var(--signal);
+    padding-left: 24px;
+}
+
+.s3-page .page-header h2 {
+    margin: 12px 0 10px;
+    font-size: clamp(30px, 4.5vw, 54px);
+    font-weight: 800;
+    letter-spacing: -0.06em;
+    line-height: 0.98;
+}
+
+.s3-page .page-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    max-width: 720px;
+}
+
+.s3-page .eyebrow {
+    color: var(--signal);
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.s3-page .welcome-line {
+    display: flex;
+    gap: 5px;
+    margin-top: 24px;
+}
+
+.s3-page .welcome-line span {
+    width: 7px;
+    height: 7px;
+    background: var(--ink);
+}
+
+.s3-page .welcome-line span:nth-child(2n) {
+    background: var(--signal);
+}
+
+.s3-page .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.s3-page .section-header h3 {
+    margin: 0;
+    font-size: 21px;
+    letter-spacing: -0.04em;
+}
+
+/* ---------- Panels + tables ---------- */
+
+.s3-page .panel {
     background: #fff;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
+    border: 1px solid var(--ink);
+    box-shadow: 4px 4px 0 var(--ink);
+    padding: 20px;
 }
 
-.s3-btn:hover {
-    opacity: 0.86;
+.s3-page .panel.table-panel {
+    padding: 0;
 }
 
-.s3-card {
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
+.s3-page .table-wrapper {
+    overflow-x: auto;
 }
 
-.s3-form-row {
+.s3-page .panel table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.s3-page .panel th,
+.s3-page .panel td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+}
+
+.s3-page .panel th {
+    background: #f0f0eb;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.s3-page .panel tr:last-child td {
+    border-bottom: 0;
+}
+
+.s3-page .panel code {
+    background: #f3f4f6;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1px 5px;
+    word-break: break-all;
+}
+
+.s3-page .actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.s3-page .actions form {
+    display: inline-flex;
+}
+
+/* ---------- Status ---------- */
+
+.s3-page .status {
+    display: inline-block;
+    border: 1px solid #27834a;
+    background: #e7f4ea;
+    color: #176b38;
+    border-radius: 0;
+    padding: 3px 7px;
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+/* ---------- Forms + buttons ---------- */
+
+.s3-page .row {
     display: flex;
     gap: 10px;
     align-items: center;
     flex-wrap: wrap;
 }
 
-.s3-form-row input[type="text"],
-.s3-form-row input[type="password"],
-.s3-form-row input[type="file"] {
+.s3-page input[type="text"],
+.s3-page input[type="file"] {
     flex: 1;
-    min-width: 180px;
+    min-width: 200px;
     padding: 10px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 0;
     font: inherit;
+    background: #fff;
 }
 
-.s3-actions {
+.s3-page input[type="text"]:focus {
+    outline: none;
+    border-color: var(--ink);
+}
+
+.s3-page .button {
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    padding: 10px 15px;
+    font-family: "Courier New", monospace;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.s3-page .button.primary {
+    background: var(--ink);
+    color: #fff;
+}
+
+.s3-page .button.secondary {
+    background: #fff;
+    color: var(--ink);
+}
+
+.s3-page .button.danger {
+    background: #fff;
+    border-color: var(--signal);
+    color: var(--signal);
+}
+
+.s3-page .button:hover {
+    opacity: 0.85;
+}
+
+.s3-page .button.primary:hover {
+    background: var(--signal);
+    border-color: var(--signal);
+    opacity: 1;
+}
+
+.s3-page .button.secondary:hover {
+    background: var(--ink);
+    color: #fff;
+    opacity: 1;
+}
+
+.s3-page .button.danger:hover {
+    background: var(--signal);
+    color: #fff;
+    opacity: 1;
+}
+
+/* ---------- Alerts ---------- */
+
+.s3-page .alert {
+    padding: 13px 15px;
+    margin-bottom: 18px;
+    border: 1px solid;
+    font-size: 14px;
+}
+
+.s3-page .alert.error {
+    border-color: var(--signal);
+    background: #fff0f0;
+    color: #a3151b;
+}
+
+.s3-page .alert.success {
+    border-color: #27834a;
+    background: #e7f4ea;
+    color: #176b38;
+}
+
+.s3-page .alert.info {
+    border-color: var(--ink);
+    background: #fff;
+    color: var(--ink);
+}
+
+/* ---------- Credential card ---------- */
+
+.s3-page .credential-grid {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 10px 16px;
+    align-items: start;
+    margin: 14px 0;
+}
+
+.s3-page .credential-grid strong {
+    font-family: "Courier New", monospace;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-top: 2px;
+}
+
+/* ---------- Integrations ---------- */
+
+.s3-page .integration-card {
+    margin-bottom: 12px;
+}
+
+.s3-page .integration-head {
     display: flex;
-    justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
-.s3-credential-grid {
-    display: grid;
-    grid-template-columns: 150px 1fr;
-    gap: 8px 14px;
-    align-items: start;
+.s3-page .integration-head strong {
+    font-family: "Courier New", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
-@media (max-width: 650px) {
-    .s3-credential-grid {
+.s3-page .muted {
+    color: var(--muted);
+}
+
+.s3-page .small {
+    font-size: 13px;
+}
+
+/* ---------- Documentation page ---------- */
+
+.s3-page .docs-toc {
+    margin-bottom: 38px;
+}
+
+.s3-page .docs-toc .panel {
+    padding: 18px 20px;
+}
+
+.s3-page .docs-toc h3 {
+    margin: 0 0 10px;
+    font-size: 18px;
+    letter-spacing: -0.03em;
+}
+
+.s3-page ol.docs-list,
+.s3-page ul.docs-list {
+    margin: 10px 0 14px;
+    padding-left: 22px;
+    line-height: 1.85;
+}
+
+.s3-page ol.docs-list li,
+.s3-page ul.docs-list li {
+    margin-bottom: 6px;
+}
+
+.s3-page ol.docs-list a {
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.s3-page ol.docs-list a:hover {
+    color: var(--signal);
+}
+
+.s3-page .docs-code {
+    background: var(--ink);
+    border: 1px solid var(--ink);
+    box-shadow: 4px 4px 0 rgba(16, 16, 16, 0.18);
+    margin: 14px 0 18px;
+    padding: 16px 18px;
+    overflow-x: auto;
+}
+
+.s3-page .docs-code code {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    color: #e8e8e2;
+    font-family: "Courier New", monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    white-space: pre;
+    word-break: normal;
+}
+
+.s3-page .docs-code code .hl { color: var(--signal); }
+
+.s3-page .docs-footer {
+    border-top: 1px solid var(--line);
+    margin-top: 48px;
+    padding-top: 18px;
+}
+
+.s3-page .panel p {
+    margin: 10px 0;
+    line-height: 1.65;
+}
+
+.s3-page .panel a {
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.s3-page .panel a:hover {
+    color: var(--signal);
+}
+
+.s3-page .docs-btn {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 800px) {
+    .s3-page .topbar {
+        padding: 0 18px;
+        height: auto;
+        min-height: 68px;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+
+    .s3-page .account-label {
+        display: none;
+    }
+
+    .s3-page .container {
+        padding: 36px 20px 70px;
+    }
+
+    .s3-page .credential-grid {
         grid-template-columns: 1fr;
         gap: 4px;
+    }
+
+    .s3-page .section-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .s3-page .actions,
+    .s3-page .panel td:last-child {
+        justify-content: flex-start;
+        text-align: left;
     }
 }

@@ -1306,7 +1306,11 @@
                                 "POST",
 
                             credentials:
-                                "same-origin"
+                                "same-origin",
+
+                            headers: {
+                                "Accept": "application/json"
+                            }
                         }
                     );
 

@@ -104,6 +104,8 @@
                 Object storage for your applications.
             </p>
 
+            <span class="card-arrow" aria-hidden="true">↗</span>
+
         </a>
 
 
@@ -145,7 +147,11 @@ async function logout() {
             await fetch(
                 "/api/auth/logout",
                 {
-                    method: "POST"
+                    method: "POST",
+
+                    headers: {
+                        "Accept": "application/json"
+                    }
                 }
             );
 

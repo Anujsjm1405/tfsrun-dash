@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TFSrun - Storage Documentation</title>
+  <link rel="stylesheet" href="/css/s3.css">
+</head>
+<body class="s3-page">
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">+</span>
+      <h1>TFSrun</h1>
+      <span class="brand-subtitle">/ storage / docs</span>
+    </div>
+    <div class="user-info">
+      <span class="account-label">STUDENT ACCOUNT</span>
+      <span>Welcome, <strong><%= user %></strong></span>
+      <a class="secondary-btn" href="/student/s3" title="Back to your storage workspace">Back to storage</a>
+      <form action="/api/auth/logout" method="post" class="logout-form">
+        <button id="s3LogoutBtn" class="secondary-btn" type="submit">Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="page-header">
+      <div class="eyebrow">TFSrun / object storage / developer guide</div>
+      <h2>Connect your app to storage</h2>
+      <p>Everything you need to store, list, download, and delete files from your own applications using the TFSrun S3-compatible object storage service (MinIO). Follow the steps in order — by the end, file upload from your code will work with no open questions about the connection.</p>
+      <div class="welcome-line" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    </section>
+
+    <nav class="section docs-toc">
+      <div class="panel">
+        <h3>On this page</h3>
+        <ol class="docs-list">
+          <li><a href="#overview">How the service works</a></li>
+          <li><a href="#credentials">Step 1 — Get your connection details</a></li>
+          <li><a href="#install">Step 2 — Install the SDK</a></li>
+          <li><a href="#client">Step 3 — Create the S3 client</a></li>
+          <li><a href="#test">Step 4 — Test the connection</a></li>
+          <li><a href="#upload">Step 5 — Upload a file</a></li>
+          <li><a href="#more-operations">Step 6 — List, download, and delete files</a></li>
+          <li><a href="#full-example">Complete minimal example (copy-paste)</a></li>
+          <li><a href="#environment">Environment variables</a></li>
+          <li><a href="#limits">Rules and limits</a></li>
+          <li><a href="#troubleshooting">Troubleshooting connection errors</a></li>
+        </ol>
+      </div>
+    </nav>
+
+    <!-- ================================================== -->
+    <section class="section" id="overview">
+      <div class="section-header"><h3>How the service works</h3></div>
+      <div class="panel">
+        <p>
+          TFSrun storage is an <strong>S3-compatible object store</strong> powered by MinIO. Any application
+          that speaks the S3 API can connect to it — the official
+          <code>@aws-sdk/client-s3</code> (AWS SDK v3 for JavaScript) works out of the box because
+          MinIO implements the same protocol. The portal itself uses this exact SDK internally, and the
+          code below mirrors the working reference app (<code>test3-app</code>) uploaded with this project.
+        </p>
+        <p>
+          The flow is always the same: your backend holds a <strong>bucket</strong> plus an
+          <strong>access key / secret key</strong> pair, creates one <code>S3Client</code>, and then sends
+          commands (<code>PutObjectCommand</code>, <code>ListObjectsV2Command</code>,
+          <code>GetObjectCommand</code>, <code>DeleteObjectCommand</code>) through it.
+          Files are called <em>objects</em> and are addressed by a <em>key</em> (their name inside the bucket).
+        </p>
+        <p class="muted small"><strong>Important:</strong> browser-side JavaScript must never hold these credentials. Always talk to S3 from a backend (Node.js, Python, etc.) and expose your own API routes to the browser, exactly like the reference app does.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="credentials">
+      <div class="section-header"><h3>Step 1 — Get your connection details</h3></div>
+      <div class="panel">
+        <p>Open the <a href="/student/s3">Storage workspace</a> and do two things:</p>
+        <ol class="docs-list">
+          <li><strong>Create (or select) a bucket.</strong> Every account gets a default
+            <code>&lt;username&gt;-workspace</code> bucket on first visit. You can create more with the
+            “Create bucket” button. Your default bucket here is:
+            <% if (defaultBucket) { %><code><%= defaultBucket %></code><% } else { %><code>&lt;username&gt;-workspace</code><% } %>
+          </li>
+          <li><strong>Create an application key.</strong> Click <em>Create app key</em> on a bucket row.
+            The portal generates a MinIO access key / secret key pair scoped to that bucket and shows them
+            <strong>once</strong> in the “Application connection details” panel. Save the secret immediately —
+            it is never displayed again. If you lose it, delete the key and create a new one.
+          </li>
+        </ol>
+        <p>That panel gives you the five values every integration needs:</p>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Detail</th><th>Example</th><th>What it is</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Endpoint</strong></td><td><code><%= endpoint %></code></td><td>Base URL of the MinIO S3 API</td></tr>
+              <tr><td><strong>Bucket</strong></td><td><% if (defaultBucket) { %><code><%= defaultBucket %></code><% } else { %><code>yourname-workspace</code><% } %></td><td>The folder-like container your files live in</td></tr>
+              <tr><td><strong>Region</strong></td><td><code><%= region %></code></td><td>S3 region string (any value works with MinIO, keep it consistent)</td></tr>
+              <tr><td><strong>Access key</strong></td><td><code>e.g. aBc123XyZ...</code></td><td>Public identifier of your app key (like a username)</td></tr>
+              <tr><td><strong>Secret key</strong></td><td><code>shown only once</code></td><td>The signing secret (like a password) — keep it private</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted small">The portal never shows access keys of other students and MinIO enforces that a key can only touch the bucket it was scoped to.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="install">
+      <div class="section-header"><h3>Step 2 — Install the SDK</h3></div>
+      <div class="panel">
+        <p>The reference app uses <code>@aws-sdk/client-s3</code> (AWS SDK v3) together with
+          <code>multer</code> for receiving files in an Express server and <code>dotenv</code> for the config:</p>
+        <pre class="docs-code"><code>npm install @aws-sdk/client-s3 multer dotenv express</code></pre>
+        <p class="muted small">Works the same way from other languages: any S3 client (boto3 for Python, aws-sdk-go, MinIO SDKs…) will connect with the same five details. This guide stays in JavaScript/Node.js like the reference app.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="client">
+      <div class="section-header"><h3>Step 3 — Create the S3 client</h3></div>
+      <div class="panel">
+        <p>Put your five details into a <code>.env</code> file in your project root:</p>
+        <pre class="docs-code"><code>S3_ENDPOINT=<%= endpoint %>
+S3_REGION=<%= region %>
+S3_BUCKET=<% if (defaultBucket) { %><%= defaultBucket %><% } else { %>yourname-workspace<% } %>
+S3_ACCESS_KEY=your-access-key-from-the-portal
+S3_SECRET_KEY=your-secret-key-from-the-portal</code></pre>
+        <p>Then create one client and reuse it for every request. Note <code>forcePathStyle: true</code> — it is <strong>required</strong> for MinIO:</p>
+        <pre class="docs-code"><code>require("dotenv").config();
+
+const { S3Client } = require("@aws-sdk/client-s3");
+
+const s3 = new S3Client({
+    endpoint: process.env.S3_ENDPOINT,
+    region: process.env.S3_REGION,
+
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+    },
+
+    // Required for MinIO-style endpoints:
+    // addresses the bucket in the URL path (http://host/bucket)
+    // instead of a subdomain (bucket.http://host).
+    forcePathStyle: true,
+});</code></pre>
+        <div class="alert info"><strong>Connection checklist.</strong> If a request ever fails, 99% of the time it is one of these: wrong endpoint (must include <code>http://</code> or <code>https://</code>), missing <code>forcePathStyle: true</code>, access/secret key mismatch, or the key was scoped to a different bucket than the one you are addressing.</div>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="test">
+      <div class="section-header"><h3>Step 4 — Test the connection</h3></div>
+      <div class="panel">
+        <p>Before building features, verify the credentials with <code>HeadBucketCommand</code> — the cheapest
+          possible call. This is exactly what the reference app's “Test S3 Connection” button does:</p>
+        <pre class="docs-code"><code>const { HeadBucketCommand } = require("@aws-sdk/client-s3");
+
+app.get("/api/test", async (req, res) => {
+    try {
+        await s3.send(
+            new HeadBucketCommand({ Bucket: process.env.S3_BUCKET })
+        );
+
+        res.json({
+            success: true,
+            message: "Successfully connected to S3 bucket",
+            bucket: process.env.S3_BUCKET,
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});</code></pre>
+        <p class="muted small"><code>200 OK</code> from HeadBucket means endpoint, region, credentials, and bucket are all correct in one shot.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="upload">
+      <div class="section-header"><h3>Step 5 — Upload a file</h3></div>
+      <div class="panel">
+        <p>The browser POSTs a <code>multipart/form-data</code> form to your backend; <code>multer</code>
+          receives it, and the buffer is put into the bucket with <code>PutObjectCommand</code>:</p>
+        <pre class="docs-code"><code>const multer = require("multer");
+const { PutObjectCommand } = require("@aws-sdk/client-s3");
+
+// Store the incoming file in memory (use diskStorage for very large files)
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post("/api/upload", upload.single("file"), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "No file selected" });
+        }
+
+        await s3.send(
+            new PutObjectCommand({
+                Bucket: process.env.S3_BUCKET,
+                Key: req.file.originalname,      // the name the file gets in the bucket
+                Body: req.file.buffer,           // the file content
+                ContentType: req.file.mimetype,  // so downloads/browsers know the type
+            })
+        );
+
+        res.json({
+            success: true,
+            message: "File uploaded successfully",
+            fileName: req.file.originalname,
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});</code></pre>
+        <p>From the browser, a plain <code>FormData</code> upload is all it takes:</p>
+        <pre class="docs-code"><code>&lt;input type="file" id="fileInput"&gt;
+&lt;button onclick="uploadFile()"&gt;Upload File&lt;/button&gt;
+
+&lt;script&gt;
+    async function uploadFile() {
+        const input = document.getElementById("fileInput");
+        if (!input.files.length) return;
+
+        const formData = new FormData();
+        formData.append("file", input.files[0]);   // field name must be "file"
+
+        const response = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+        });
+
+        const data = await response.json();
+        console.log(data.success ? "Uploaded: " + data.fileName : data.message);
+    }
+&lt;/script&gt;</code></pre>
+        <p class="muted small">The field name in <code>formData.append("file", …)</code> must match <code>upload.single("file")</code>. The TFSrun portal itself streams uploads through a temp file on disk instead of memory, which removes any size ceiling — copy that pattern if you expect large files.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="more-operations">
+      <div class="section-header"><h3>Step 6 — List, download, and delete files</h3></div>
+      <div class="panel">
+        <p><strong>List objects</strong> in the bucket:</p>
+        <pre class="docs-code"><code>const { ListObjectsV2Command } = require("@aws-sdk/client-s3");
+
+app.get("/api/files", async (req, res) => {
+    try {
+        const response = await s3.send(
+            new ListObjectsV2Command({ Bucket: process.env.S3_BUCKET })
+        );
+
+        const files = (response.Contents || []).map((file) => ({
+            key: file.Key,
+            size: file.Size,
+            lastModified: file.LastModified,
+        }));
+
+        res.json({ success: true, files });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});</code></pre>
+        <p><strong>Download</strong> an object and stream it back to the browser:</p>
+        <pre class="docs-code"><code>const { GetObjectCommand } = require("@aws-sdk/client-s3");
+
+app.get("/api/files/:key/download", async (req, res) => {
+    try {
+        const response = await s3.send(
+            new GetObjectCommand({
+                Bucket: process.env.S3_BUCKET,
+                Key: req.params.key,
+            })
+        );
+
+        res.setHeader("Content-Type", response.ContentType || "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="${req.params.key}"`);
+        response.Body.pipe(res);   // Body is a readable stream
+
+    } catch (error) {
+        console.error(error);
+        res.status(404).send("File not found.");
+    }
+});</code></pre>
+        <p><strong>Delete</strong> an object:</p>
+        <pre class="docs-code"><code>const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+
+app.delete("/api/files/:key", async (req, res) => {
+    try {
+        await s3.send(
+            new DeleteObjectCommand({
+                Bucket: process.env.S3_BUCKET,
+                Key: req.params.key,
+            })
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});</code></pre>
+        <p class="muted small"><strong>Keys</strong> can contain slashes to fake folders, e.g. <code>projects/2026/report.pdf</code>. Listing supports <code>Prefix</code> and <code>Delimiter</code> options, and pages results — pass <code>ContinuationToken</code> for more than 1000 objects.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="full-example">
+      <div class="section-header"><h3>Complete minimal example (copy-paste)</h3></div>
+      <div class="panel">
+        <p>A whole working server — the same skeleton as the reference <code>test3-app/server.js</code>:</p>
+        <pre class="docs-code"><code>require("dotenv").config();
+
+const express = require("express");
+const multer = require("multer");
+const {
+    S3Client,
+    PutObjectCommand,
+    ListObjectsV2Command,
+    GetObjectCommand,
+    DeleteObjectCommand,
+    HeadBucketCommand,
+} = require("@aws-sdk/client-s3");
+
+const app = express();
+const BUCKET = process.env.S3_BUCKET;
+
+const s3 = new S3Client({
+    endpoint: process.env.S3_ENDPOINT,
+    region: process.env.S3_REGION,
+    credentials: {
+        accessKeyId: process.env.S3_ACCESS_KEY,
+        secretAccessKey: process.env.S3_SECRET_KEY,
+    },
+    forcePathStyle: true,
+});
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.use(express.json());
+app.use(express.static("public"));
+
+// 1. Health check
+app.get("/api/test", async (_req, res) => {
+    try {
+        await s3.send(new HeadBucketCommand({ Bucket: BUCKET }));
+        res.json({ success: true, message: "Connected", bucket: BUCKET });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 2. Upload
+app.post("/api/upload", upload.single("file"), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "No file selected" });
+        }
+        await s3.send(new PutObjectCommand({
+            Bucket: BUCKET,
+            Key: req.file.originalname,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+        }));
+        res.json({ success: true, fileName: req.file.originalname });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 3. List
+app.get("/api/files", async (_req, res) => {
+    try {
+        const out = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET }));
+        res.json({
+            success: true,
+            files: (out.Contents || []).map(f => ({
+                key: f.Key, size: f.Size, lastModified: f.LastModified,
+            })),
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 4. Download
+app.get("/api/files/:key/download", async (req, res) => {
+    try {
+        const out = await s3.send(new GetObjectCommand({
+            Bucket: BUCKET, Key: req.params.key,
+        }));
+        res.setHeader("Content-Type", out.ContentType || "application/octet-stream");
+        res.setHeader("Content-Disposition", `attachment; filename="${req.params.key}"`);
+        out.Body.pipe(res);
+    } catch (error) {
+        res.status(404).send("File not found.");
+    }
+});
+
+// 5. Delete
+app.delete("/api/files/:key", async (req, res) => {
+    try {
+        await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: req.params.key }));
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+app.listen(3000, () => {
+    console.log("Server running at http://localhost:3000");
+});</code></pre>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="environment">
+      <div class="section-header"><h3>Environment variables</h3></div>
+      <div class="panel">
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Variable</th><th>Required</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>S3_ENDPOINT</code></td><td>Yes</td><td>MinIO API base URL, e.g. <code><%= endpoint %></code></td></tr>
+              <tr><td><code>S3_REGION</code></td><td>Yes</td><td>Region string, e.g. <code><%= region %></code></td></tr>
+              <tr><td><code>S3_BUCKET</code></td><td>Yes</td><td>Your bucket name from the storage page</td></tr>
+              <tr><td><code>S3_ACCESS_KEY</code></td><td>Yes</td><td>Access key from an app key integration</td></tr>
+              <tr><td><code>S3_SECRET_KEY</code></td><td>Yes</td><td>Secret key shown once when the key was created</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted small">Add <code>.env</code> to <code>.gitignore</code> before your first commit — a leaked secret key gives full access to that bucket until you remove the key on the storage page.</p>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="limits">
+      <div class="section-header"><h3>Rules and limits</h3></div>
+      <div class="panel">
+        <ul class="docs-list">
+          <li><strong>One bucket per key:</strong> an app key is scoped to the bucket it was created from. Using it on another bucket returns <code>AccessDenied</code>.</li>
+          <li><strong>Ownership is enforced twice:</strong> the portal only lists/operates your own buckets, and MinIO policies block anyone else's keys from touching them.</li>
+          <li><strong>No upload size limit</strong> on the portal; your own app can stream any size with the SDK (use disk storage or multipart uploads for very large files).</li>
+          <li><strong>Bucket names</strong> must be 1–24 characters, lowercase letters/numbers/hyphens, and are automatically prefixed with your username. The default <code>&lt;username&gt;-workspace</code> bucket cannot be deleted.</li>
+          <li><strong>Buckets must be empty</strong> before deletion — delete the objects first.</li>
+          <li><strong>Secrets are shown once.</strong> There is no “view password” — create a new key if lost.</li>
+          <li><strong>Backend only:</strong> never embed access/secret keys in browser JavaScript, mobile apps, or public repos.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ================================================== -->
+    <section class="section" id="troubleshooting">
+      <div class="section-header"><h3>Troubleshooting connection errors</h3></div>
+      <div class="panel">
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>AccessDenied</code></td>
+                <td>Key scoped to a different bucket, or the key was removed</td>
+                <td>Use the bucket the key was created for, or create a fresh app key on the storage page</td>
+              </tr>
+              <tr>
+                <td><code>InvalidAccessKeyId</code></td>
+                <td>Access key typo or deleted key</td>
+                <td>Re-copy the access key; recreate the integration if it was removed</td>
+              </tr>
+              <tr>
+                <td><code>SignatureDoesNotMatch</code></td>
+                <td>Wrong secret key</td>
+                <td>Re-enter the secret exactly as shown at creation (no quotes/spaces in .env)</td>
+              </tr>
+              <tr>
+                <td><code>NoSuchBucket</code></td>
+                <td>Bucket name mismatch</td>
+                <td>Copy the exact bucket name from the storage page — names include your username prefix</td>
+              </tr>
+              <tr>
+                <td><code>ECONNREFUSED</code> / fetch failed / timeout</td>
+                <td>Wrong endpoint host/port, or MinIO is down</td>
+                <td>Check <code>S3_ENDPOINT</code> includes the scheme and port; retry the Test Connection button on the storage page</td>
+              </tr>
+              <tr>
+                <td>Request goes to <code>bucket.host</code> and fails DNS</td>
+                <td>Missing <code>forcePathStyle: true</code></td>
+                <td>Add <code>forcePathStyle: true</code> to the S3Client options</td>
+              </tr>
+              <tr>
+                <td><code>MulterError: Unexpected field</code></td>
+                <td>Form field name is not <code>file</code></td>
+                <td>Name the form field <code>file</code> or change <code>upload.single("file")</code> to match</td>
+              </tr>
+              <tr>
+                <td>403 with empty body on download</td>
+                <td>Object key doesn't exist or belongs to another bucket</td>
+                <td>List the bucket first and use the exact <code>Key</code> returned</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted small">Still stuck? Open the Storage workspace and press <em>Test Connection</em>-style verification: if the portal lists your bucket and files, the storage service is healthy and the problem is in your app's five connection details.</p>
+      </div>
+    </section>
+
+    <section class="section docs-footer">
+      <p class="muted small">Reference implementation: <code>test3-app/server.js</code> in this repository. SDK: <code>@aws-sdk/client-s3</code> v3 · Storage backend: MinIO (S3-compatible). Last verified: September 2026.</p>
+    </section>
+  </main>
+  <script src="/js/s3.js"></script>
+</body>
+</html>

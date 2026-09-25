@@ -391,7 +391,11 @@ async function logout() {
         await apiRequest(
             "/api/auth/logout",
             {
-                method: "POST"
+                method: "POST",
+
+                headers: {
+                    "Accept": "application/json"
+                }
             }
         );
 

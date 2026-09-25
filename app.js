@@ -27,7 +27,8 @@ const terminalProxy =
     require("./src/terminal/terminalProxy");
 
 const {
-    requireAdmin
+    requireAdmin,
+    requireStudent
 } = require("./src/auth/authMiddleware");
 
 const s3Routes =
@@ -167,38 +168,6 @@ function requireLogin(
 
         return res.redirect(
             "/login"
-        );
-    }
-
-    next();
-}
-
-
-function requireStudent(
-    req,
-    res,
-    next
-) {
-
-    if (
-        !req.session ||
-        !req.session.user
-    ) {
-
-        return res.redirect(
-            "/login"
-        );
-    }
-
-    if (
-        req.session.user.role !==
-        "student"
-    ) {
-
-        return res.status(
-            403
-        ).send(
-            "Student access required"
         );
     }
 
