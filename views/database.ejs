@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title><%= title %></title>
+
+    <link
+        rel="stylesheet"
+        href="/css/compute.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="/css/database.css"
+    >
+
+</head>
+
+
+<body>
+
+    <header class="topbar">
+
+        <div class="topbar-brand">
+            TFSrun
+        </div>
+
+        <nav class="topbar-nav">
+
+            <a href="/student">
+                Dashboard
+            </a>
+
+            <a href="/student/compute">
+                Compute
+            </a>
+
+            <a href="/student/s3">
+                Storage
+            </a>
+
+            <a
+                href="/student/database"
+                class="active"
+            >
+                Database
+            </a>
+
+            <button
+                type="button"
+                id="logoutButton"
+                class="logout-button"
+            >
+                Logout
+            </button>
+
+        </nav>
+
+    </header>
+
+
+    <main class="page">
+
+        <section class="page-header">
+
+            <h1>Database</h1>
+
+            <p>
+                Managed PostgreSQL instances. Each database runs in
+                its own isolated container, placed automatically on
+                whichever node has capacity.
+            </p>
+
+        </section>
+
+
+        <section class="panel">
+
+            <h2>Create a database</h2>
+
+            <form id="createDatabaseForm" class="db-form">
+
+                <label>
+                    Service name
+                    <input
+                        type="text"
+                        name="name"
+                        placeholder="my-project-db"
+                        required
+                    >
+                </label>
+
+                <label>
+                    PostgreSQL username
+                    <input
+                        type="text"
+                        name="dbUser"
+                        placeholder="lowercase, digits, underscore"
+                        required
+                    >
+                </label>
+
+                <label>
+                    PostgreSQL password
+                    <input
+                        type="password"
+                        name="dbPassword"
+                        required
+                    >
+                </label>
+
+                <label>
+                    Confirm password
+                    <input
+                        type="password"
+                        name="dbPasswordConfirm"
+                        required
+                    >
+                </label>
+
+                <label>
+                    CPU cores
+                    <select name="cpu">
+                        <% limits.cpu.forEach(function (value) { %>
+                            <option value="<%= value %>">
+                                <%= value %>
+                            </option>
+                        <% }); %>
+                    </select>
+                </label>
+
+                <label>
+                    Memory
+                    <select name="ramMb">
+                        <% limits.ramMb.forEach(function (value) { %>
+                            <option value="<%= value %>">
+                                <%= value %> MB
+                            </option>
+                        <% }); %>
+                    </select>
+                </label>
+
+                <label>
+                    Storage
+                    <select name="storageGb">
+                        <% limits.storageGb.forEach(function (value) { %>
+                            <option value="<%= value %>">
+                                <%= value %> GB
+                            </option>
+                        <% }); %>
+                    </select>
+                </label>
+
+                <button type="submit" id="createButton">
+                    Create database
+                </button>
+
+            </form>
+
+            <p id="createStatus" class="db-status"></p>
+
+            <p class="db-note">
+                You can create additional databases yourself once
+                connected, up to your allocated storage. Your
+                instance is reachable from the campus network.
+            </p>
+
+        </section>
+
+
+        <section class="panel">
+
+            <div class="panel-heading">
+
+                <h2>Your databases</h2>
+
+                <button
+                    type="button"
+                    id="refreshButton"
+                    class="secondary-button"
+                >
+                    Refresh
+                </button>
+
+            </div>
+
+            <table class="db-table">
+
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Node</th>
+                        <th>CT ID</th>
+                        <th>Username</th>
+                        <th>CPU</th>
+                        <th>RAM</th>
+                        <th>Disk</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody id="databaseTableBody">
+                    <tr>
+                        <td colspan="9">Loading...</td>
+                    </tr>
+                </tbody>
+
+            </table>
+
+        </section>
+
+    </main>
+
+    <script src="/js/database.js"></script>
+
+</body>
+
+</html>

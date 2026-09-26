@@ -34,6 +34,9 @@ const {
 const s3Routes =
     require("./src/s3/s3Routes");
 
+const databaseRoutes =
+    require("./src/database/databaseRoutes");
+
 const app = express();
 
 const server =
@@ -422,6 +425,16 @@ app.use(
 app.use(
     "/student/s3",
     s3Routes
+);
+
+
+// --------------------------------------------------
+// Database routes
+// --------------------------------------------------
+
+app.use(
+    "/student/database",
+    databaseRoutes
 );
 
 
